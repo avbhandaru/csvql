@@ -1,21 +1,57 @@
-use std::env;
-use std::path;
-use structopt::StructOpt;
+#[macro_use]
+extern crate clap;
 
-struct Cli {
-   query: String,
-   filename: path::PathBuf,
-}
+use clap::{App, Arg};
+use std::path::PathBuf;
+
+mod resolve;
 
 fn main() {
-    let query: String = env::args().nth(1).expect("No query given");
-    let filename: String = env::args().nth(2).expect("No csv filename given");
-    let args = Cli {
-        query: query,
-        filename: path::PathBuf::from(filename),
-    };
-
-    println!("Searching for {}", args.query);
-    println!("In file {}", args.filename.into_os_string().into_string().unwrap());
+  let options = App::new("csvql")
+    .version(crate_version!())
+    .author(crate_authors!())
+    .about(crate_description!())
+    .arg(
+      Arg::with_name("imports")
+        .short("i")
+        .long("imports")
+        .help("List of .csv files to import and resolve into tables")
+        .min_values(1),
+    )
+    .arg(
+      Arg::with_name("exports")
+        .short("e")
+        .long("exports")
+        .help("List of export files to be output to as csv or json. Defaults to STDOUT")
+        .min_values(1),
+    )
+    .arg(
+      Arg::with_name("use_json")
+        .short("j")
+        .long("json")
+        .help("If present, then query output will be in JSON format versus csv (default)"),
+    )
+    .arg(
+      Arg::with_name("queries")
+        .short("q")
+        .long("queries")
+        .help("List of .sql query files to be executed. If not present then will open repl")
+        .min_values(1),
+    )
+    .get_matches();
+  println!("Options {:#?}", options);
+  let query_vector = options
+    .values_of("queries")
+    .unwrap()
+    .into_iter()
+    .map(PathBuf::from)
+    .collect::<Vec<_>>();
+  println!("Queries: {:#?}", query_vector);
+  println!(
+    "Query contents\n{:#?}",
+    query_vector
+      .into_iter()
+      .map(resolve::sql_table_paths)
+      .collect::<Vec<_>>()
+  );
 }
-
