@@ -13,7 +13,13 @@ license-file = "LICENSE.txt"
 [dependencies]
 # structopt = { version = "0.3", features = [ "paw" ] }
 # paw = "1.0"
-diesel = { version = "1.4.4", features = ["postgres"] }
+# diesel = { version = "1.4.4", features = ["postgres"] }
 dotenv = "0.15.0"
 clap = "2.33"
 regex = "1"
+# tokio-core = "0.1.17"
+tokio-postgres = "0.6.0"
+# futures = "0.3.8"
+# futures-state-stream = "0.2.0"
+tokio = { version = "0.3", features = ["full"] }
+async-trait = "0.1.42"
