@@ -1,11 +1,7 @@
+use crate::table::{EntryType, Header, Rows};
 use async_trait::async_trait;
 use std::vec::Vec;
 use tokio_postgres::{Client, Error};
-
-// TODO make this non-tokio-postgres specific
-pub type ColumnType = String;
-pub type Header = Vec<(String, ColumnType)>;
-pub type Rows = Vec<Vec<String>>;
 
 #[derive(Debug)]
 pub struct QueryResponse {

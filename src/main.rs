@@ -14,9 +14,11 @@ use dotenv::dotenv;
 use std::env;
 use std::path::PathBuf;
 
+mod file;
 mod query;
 mod repl;
 mod resolve;
+mod table;
 // #[macro_use]
 // mod util;
 use query::{postgres, querier};

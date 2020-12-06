@@ -1,4 +1,5 @@
-use crate::querier::{Header, Querier, QuerierTrait, QueryResponse, Rows};
+use crate::querier::{Querier, QuerierTrait, QueryResponse};
+use crate::table::{Header, Rows};
 use async_trait::async_trait;
 use tokio;
 use tokio_postgres::{connect, Error, NoTls, Row};
@@ -60,7 +61,7 @@ impl QuerierTrait for Querier {
       .into_iter()
       .map(|row| {
         let mut row_vector = Vec::new();
-        for (col_index, column) in row.columns().iter().enumerate() {
+        for (col_index, _) in row.columns().iter().enumerate() {
           row_vector.push(row.get(col_index));
         }
         row_vector
