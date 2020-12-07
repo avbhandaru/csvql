@@ -1,11 +1,17 @@
-use crate::querier::{Querier, QuerierTrait, QueryResponse};
-use crate::table::{Header, Rows};
+use crate::querier::QuerierTrait;
+use crate::table;
 use async_trait::async_trait;
-use tokio;
-use tokio_postgres::{connect, Error, NoTls, Row};
+use tokio_postgres::error::Error;
+use tokio_postgres::{connect, Client, NoTls, Row};
 
-#[async_trait]
-impl QuerierTrait for Querier {
+#[derive(Debug)]
+pub struct Querier {
+  pub name: String,
+  pub url: String,
+  pub client: Client,
+}
+
+impl Querier {
   async fn new(querier_name: &str, database_url: &str) -> Result<Self, Error> {
     let (client, conn) = connect(&database_url, NoTls).await?;
 
@@ -23,12 +29,15 @@ impl QuerierTrait for Querier {
       client: client,
     })
   }
+}
 
+#[async_trait]
+impl QuerierTrait for Querier {
   async fn store(
     &self,
     table_name: &str,
-    table_header: Header,
-    table_data: Rows,
+    table_header: table::Header,
+    table_data: table::Rows,
   ) -> Result<(), Error> {
     self
       .client
@@ -41,10 +50,10 @@ impl QuerierTrait for Querier {
     Ok(())
   }
 
-  async fn query(&self, query_statement: &str) -> Result<QueryResponse, Error> {
+  async fn query(&self, query_statement: &str) -> Result<table::Table, Error> {
     let rows: Vec<Row> = self.client.query(query_statement, &[]).await?;
 
-    let header_response: Header = rows
+    let header_response: table::Header = rows
       .get(0)
       .unwrap()
       .columns()
@@ -57,7 +66,7 @@ impl QuerierTrait for Querier {
       })
       .collect::<Vec<_>>();
 
-    let rows_response: Rows = rows
+    let rows_response: table::Rows = rows
       .into_iter()
       .map(|row| {
         let mut row_vector = Vec::new();
@@ -68,13 +77,10 @@ impl QuerierTrait for Querier {
       })
       .collect::<Vec<_>>();
 
-    Ok(QueryResponse {
-      header: header_response,
-      rows: rows_response,
-    })
+    Ok(table::Table::new(header_response, rows_response))
   }
 
-  async fn load(&self, table_name: &str) -> Result<QueryResponse, Error> {
+  async fn load(&self, table_name: &str) -> Result<table::Table, Error> {
     self
       .query(format!("SELECT * FROM {}", table_name).as_str())
       .await
@@ -82,7 +88,7 @@ impl QuerierTrait for Querier {
 }
 
 // HELPERS
-fn create_table_query(table_name: &str, table_header: Header) -> String {
+fn create_table_query(table_name: &str, table_header: table::Header) -> String {
   let schema = table_header
     .into_iter()
     .map(|(col_name, col_type)| format!("{} {}", col_name, col_type))
@@ -91,7 +97,7 @@ fn create_table_query(table_name: &str, table_header: Header) -> String {
   format!("CREATE TABLE {} ({})", table_name, schema)
 }
 
-fn insert_into_query(table_name: &str, table_data: Rows) -> String {
+fn insert_into_query(table_name: &str, table_data: table::Rows) -> String {
   let values = table_data
     .into_iter()
     .map(|row| {

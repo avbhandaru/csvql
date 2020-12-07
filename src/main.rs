@@ -1,32 +1,19 @@
-// use futures::Future;
-// use futures_state_stream::StateStream;
-// use tokio_core::reactor::Core;
-
-use tokio_postgres::{Error, NoTls};
-
-use clap::{crate_authors, crate_description, crate_version, App, Arg};
-// use diesel::dsl;
-// use diesel::pg::PgConnection;
-// use diesel::prelude::*;
-// use diesel::sql_query;
-// use diesel::sql_types::*;
-use dotenv::dotenv;
-use std::env;
-use std::path::PathBuf;
-
 mod file;
 mod query;
 mod repl;
 mod resolve;
 mod table;
 mod util;
-// #[macro_use]
-// mod util;
-use query::{postgres, querier};
+
+use clap::{crate_authors, crate_description, crate_version, App, Arg};
+use dotenv::dotenv;
+use query::querier;
+use std::env;
+use std::path::PathBuf;
 
 #[tokio::main]
 async fn main() {
-  let options = App::new("csvql")
+  let _options = App::new("csvql")
     .version(crate_version!())
     .author(crate_authors!())
     .about(crate_description!())
@@ -69,7 +56,7 @@ async fn main() {
 }
 
 // TODO remove later
-fn test_cli_works(options: clap::ArgMatches) {
+fn _test_cli_works(options: clap::ArgMatches) {
   println!("Options {:#?}", options);
   if options.is_present("queries") {
     let query_vector = options

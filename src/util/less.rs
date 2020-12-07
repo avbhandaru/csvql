@@ -1,4 +1,5 @@
 use crate::table;
+use crate::table::Purveyor;
 // use std::io::prelude::*;
 use std::process::{Command, Stdio};
 

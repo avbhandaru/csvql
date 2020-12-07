@@ -1,12 +1,14 @@
 use crate::table;
 use io::BufRead;
-use serde::{Deserialize, Serialize};
-use std::{convert, fs, io, path};
+use serde::ser;
+use serde::{Serialize, Serializer};
+use std::io::Write;
+use std::{fs, io, path};
 
 #[derive(Debug)]
 pub struct Error {
-  path: path::PathBuf,
-  message: String,
+  pub path: path::PathBuf,
+  pub message: String,
 }
 
 impl Error {
@@ -63,10 +65,27 @@ pub fn import_csv(path: &path::Path) -> Result<table::Table, Error> {
 }
 
 pub fn export_csv(path: &path::Path, table: &table::Table) -> Result<(), Error> {
-  Ok(())
+  let header = table
+    .header
+    .clone()
+    .into_iter()
+    .map(|(col_name, col_type)| format!("{}({})", &col_name, &col_type))
+    .collect::<Vec<String>>()
+    .join(",");
+  let rows = table
+    .rows
+    .clone()
+    .into_iter()
+    .map(|row| row.join(","))
+    .collect::<Vec<String>>()
+    .join(",");
+  write_file(path, format!("{}\n{}\n", header, rows))
 }
 
 pub fn export_json(path: &path::Path, table: &table::Table) -> Result<(), Error> {
+  // let contents = ser::to_string(table)?;
+  // write_file(path, contents)?
+  todo!();
   Ok(())
 }
 
@@ -81,17 +100,18 @@ fn read_file(path: &path::Path) -> Result<Vec<String>, Error> {
       for (_, line_result) in lines.enumerate() {
         match line_result {
           Ok(line) => res.push(line),
-          Err(io_error) => {
+          Err(_) => {
+            // io_error
             return Err(Error::new(
               path.to_str().unwrap().to_string(),
               "Failed to read line.".to_string(),
-            ))
+            ));
           }
         }
       }
       Ok(res)
     }
-    Err(io_error) => Err(Error::new(
+    Err(_) => Err(Error::new(
       path.to_str().unwrap().to_string(),
       "Failed to read file.".to_string(),
     )),
@@ -99,13 +119,38 @@ fn read_file(path: &path::Path) -> Result<Vec<String>, Error> {
 }
 
 fn write_file(path: &path::Path, contents: String) -> Result<(), Error> {
-  unimplemented!()
-}
+  // could use fs::write(path, contents) if I wanted to overwrite contents
+  // let file = fs::File::with_options().append(true).create(true).open(path);
+  let mut file = match fs::OpenOptions::new().append(true).create(true).open(path) {
+    Ok(file) => file,
+    Err(_) => {
+      // io_error
+      return Err(Error::new(
+        path.to_str().unwrap().to_string(),
+        "Failed open file at path.".to_string(),
+      ));
+    }
+  };
+  match file.write_all(contents.as_bytes()) {
+    Err(_) => {
+      // io_error
+      return Err(Error::new(
+        path.to_str().unwrap().to_string(),
+        "Failed to write_all to file.".to_string(),
+      ));
+    }
+    _ => (),
+  };
+  match file.sync_all() {
+    Err(_) => {
+      // io_error
+      return Err(Error::new(
+        path.to_str().unwrap().to_string(),
+        "Failed to sync_all to file system.".to_string(),
+      ));
+    }
+    _ => (),
+  };
 
-fn fmt_header_csv(header: &table::Header) -> String {
-  unimplemented!();
-}
-
-fn fmt_rows_csv(rows: &table::Rows) -> String {
-  unimplemented!();
+  Ok(())
 }
