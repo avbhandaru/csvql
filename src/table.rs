@@ -2,7 +2,7 @@ use crate::file;
 use serde::{Deserialize, Serialize};
 use std::clone;
 use std::fmt;
-use std::path::PathBuf;
+use std::path::Path;
 
 pub type EntryType = String; // make into tokio_postgres::types::Type
 pub type Header = Vec<(String, EntryType)>;
@@ -27,11 +27,11 @@ impl Table {
     }
   }
 
-  pub fn import(path: PathBuf) -> Result<Self, file::Error> {
+  pub fn import(path: &Path) -> Result<Self, file::Error> {
     file::import_csv(path)
   }
 
-  pub fn export(&self, path: PathBuf, use_json: bool) -> Result<(), file::Error> {
+  pub fn export(&self, path: &Path, use_json: bool) -> Result<(), file::Error> {
     if use_json {
       file::export_json(path, self)
     } else {

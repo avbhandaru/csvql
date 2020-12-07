@@ -1,5 +1,6 @@
 // #[macro_use]
 // use crate::util;
+use crate::util::less;
 use queues::{Buffer, IsQueue};
 use regex::Regex;
 use std::fmt::Display;
@@ -45,6 +46,7 @@ pub fn run() {
       print!("  ");
       flush_repl();
     }
+    println!("");
     if experienced_read_error {
       continue;
     }
@@ -141,8 +143,8 @@ fn execute_command(query_history: &mut Buffer<Command>, command: Command) -> Rep
   match command {
     Command::Invalid(user_input) => print_invalid(user_input),
     Command::Quit => return Repl::Quit,
-    Command::Help => print_help(),
-    Command::Usage => print_usage(),
+    Command::Help => less_help(),
+    Command::Usage => less_usage(),
     Command::Query(query) => {
       let res = query_history.add(Command::Query(query.clone()));
       match res {
@@ -234,8 +236,9 @@ fn print_invalid(user_input: String) {
   )
 }
 
-fn print_help() {
-  println!(
+// TODO put help in a public/static/docs/file
+fn less_help() {
+  let help = format!(
     "
     Terminology:
       PATH              - an absolute or relative path to a csv (imports) or json file (exports can be csv or json)
@@ -263,10 +266,12 @@ fn print_help() {
       \\d[+] name       - describe table, view, sequence, or index, with additional information if (+) is used
     "
   );
+  less::string(help);
 }
 
-fn print_usage() {
-  println!(
+// TODO put usage in a public/static/docs/file
+fn less_usage() {
+  let usage = format!(
     "
     Querying the Database:
       Regular sql code followed by a semi-colon.
@@ -357,5 +362,6 @@ fn print_usage() {
          c      | character varying(128) |           |          |
 
     "
-  )
+  );
+  less::string(usage);
 }

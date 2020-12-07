@@ -19,6 +19,7 @@ mod query;
 mod repl;
 mod resolve;
 mod table;
+mod util;
 // #[macro_use]
 // mod util;
 use query::{postgres, querier};
@@ -57,6 +58,18 @@ async fn main() {
         .min_values(1),
     )
     .get_matches();
+  // ## Test cli works?
+  // test_cli_works(options);
+
+  // ## Test running repl
+  repl::run();
+
+  // ## Test less command
+  // util::less::table("/Users/akhil/csvql/data/test.csv");
+}
+
+// TODO remove later
+fn test_cli_works(options: clap::ArgMatches) {
   println!("Options {:#?}", options);
   if options.is_present("queries") {
     let query_vector = options
@@ -78,7 +91,4 @@ async fn main() {
   for (key, value) in env::vars() {
     println!("==> {}: {}", key, value);
   }
-
-  // Test running repl
-  repl::run();
 }
