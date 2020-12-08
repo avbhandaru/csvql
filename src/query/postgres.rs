@@ -12,7 +12,7 @@ pub struct Querier {
 }
 
 impl Querier {
-  async fn new(querier_name: &str, database_url: &str) -> Result<Self, Error> {
+  pub async fn new(querier_name: &str, database_url: &str) -> Result<Self, Error> {
     let (client, conn) = connect(&database_url, NoTls).await?;
 
     // The connection object performs the actual communication with the database,

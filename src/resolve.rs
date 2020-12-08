@@ -1,7 +1,20 @@
 // use regex::Regex;
 use std::fs::File;
 use std::io::{self, BufRead};
-use std::path::{Path, PathBuf};
+use std::path::{Path, PathBuf, MAIN_SEPARATOR};
+
+// TODO move this to utils?
+
+pub fn get_table_name_from_path(path: &str) -> String {
+  // TODO Handle all errors here
+  // This is very hacky
+  let extension = Path::new(path).extension().unwrap().to_str().unwrap();
+  let path_without_extension = path.strip_suffix(extension).unwrap();
+  let path_component_vectors = path_without_extension.split(MAIN_SEPARATOR);
+  let file_name = path_component_vectors.last().unwrap();
+  let table_name = file_name.replace('.', "_");
+  table_name.to_string()
+}
 
 // TODO figure out the cli for this? And how I want these queries to look?
 

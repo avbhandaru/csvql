@@ -30,7 +30,6 @@ pub fn string(input: String) {
     .expect("Failed to wait on (less) process.");
 }
 
-pub fn table(path_str: &str) {
-  let test_table = table::Table::import(std::path::Path::new(path_str)).unwrap();
-  string(format!("{}", test_table));
+pub fn table(table: &table::Table) {
+  string(format!("{}", table));
 }

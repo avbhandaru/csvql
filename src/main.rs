@@ -7,7 +7,7 @@ mod util;
 
 use clap::{crate_authors, crate_description, crate_version, App, Arg};
 use dotenv::dotenv;
-use query::querier;
+use query::{postgres, querier};
 use std::env;
 use std::path::PathBuf;
 
@@ -49,7 +49,7 @@ async fn main() {
   // test_cli_works(options);
 
   // ## Test running repl
-  repl::run();
+  repl::run().await;
 
   // ## Test less command
   // util::less::table("/Users/akhil/csvql/data/test.csv");

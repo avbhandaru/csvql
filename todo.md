@@ -1,6 +1,7 @@
 # todo
  - Make formatting/cloning of headers and widths more efficient in table.rs/just pass refs
  - Remove cloning and understand rust borrowing and lifetimes to optimize.
+ - Make `table::Table::new` return a `Box<Table>`. This is ideal since tables can be really large and we should keep track of them in the heap?
 
 ## Misc Tracking
  - Pseudo-finalize `docs/commands.md`
@@ -23,6 +24,7 @@
 	+ Should be able to enter `select * from table;#[output]`
 	+ Annotations can look like this `#[output(=optional(pathBuf))]`
 	+ sql new tables+views should also be output-able, i.e. `create view view_name as ...;#[output='/path/to/out.csv']`
+	+ Ignore most of the above, add support for `\e table/view_name`
  - Add some client side SQL validation? Or if that's not realistic, settle for propogating tokio_postgres db Error.
  - Testing
 	+ Unit tests

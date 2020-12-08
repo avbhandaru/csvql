@@ -1,33 +1,44 @@
 // #[macro_use]
 // use crate::util;
-use crate::util::less;
+use crate::query::{postgres, querier};
+use crate::resolve;
+use crate::table::{Purveyor, Table};
+use crate::util::{evict, less};
+use collections::VecDeque;
+use evict::EvictingList;
+use querier::QuerierTrait;
 use queues::{Buffer, IsQueue};
 use regex::Regex;
 use std::fmt::Display;
 use std::io::{stdin, stdout, Write};
+use std::str::FromStr;
+use std::{collections, env, fmt, io, path};
 
 const QUERY_HISTORY_CAPACITY: usize = 5;
+const MAX_PRINTABLE_ROWS: usize = 20;
+const DATABASE_URL_KEY: &str = "DATABASE_URL";
 
-enum Repl {
+enum Repl<'a> {
   Quit,
   Continue,
+  AlertThenContinue(&'a str),
 }
 
 #[derive(Debug, Clone)]
 enum Command {
   Invalid(String),
-  Quit,                                      // Quit the REPL
-  Help,                                      // Get help info for REPL
-  Usage,                                     // Get usage examples for the REPL
-  Query(String),                             // Execute a SQL query
-  Import(String),                            // Import a csv/json input file as a table in the db
-  Export(Option<bool>, Option<i32>, String), // Export a table into a csv/json output file
-  List(bool),                                // List all tables, views, seqs concisely or verbosely
-  Info(bool, String),                        // Show concise or verbose information on a table
+  Quit,                           // Quit the REPL
+  Help,                           // Get help info for REPL
+  Usage,                          // Get usage examples for the REPL
+  Query(String),                  // Execute a SQL query
+  Import(String, Option<String>), // Import a csv/json input file as a table in the db
+  Export(bool, usize, String),    // Export a table into a csv/json output file
+  List(bool),                     // List all tables, views, seqs concisely or verbosely
+  Info(bool, String),             // Show concise or verbose information on a table
 }
 
-pub fn run() {
-  let mut query_history: Buffer<Command> = Buffer::new(QUERY_HISTORY_CAPACITY);
+pub async fn run() {
+  let mut query_history: VecDeque<(Command, Table)> = VecDeque::evl_new(QUERY_HISTORY_CAPACITY);
   loop {
     print!("> ");
     flush_repl();
@@ -53,15 +64,17 @@ pub fn run() {
 
     let user_input = lines.join(" ");
     let user_command = into_command(user_input);
-    let result = execute_command(&mut query_history, user_command);
+    let result = execute_command(&mut query_history, user_command).await;
     match result {
       Repl::Continue => continue,
+      Repl::AlertThenContinue(alert) => println!("{}", alert),
       Repl::Quit => break,
     }
   }
   println!("");
 }
 
+// TODO factor this function out a bit
 fn into_command(user_input: String) -> Command {
   if line_is_invalid(&user_input) {
     return Command::Invalid(user_input);
@@ -71,32 +84,45 @@ fn into_command(user_input: String) -> Command {
     return Command::Query(user_input.strip_suffix(";").unwrap().to_string());
   }
 
-  let user_input_args = user_input.split("\\s").collect::<Vec<&str>>();
+  let user_input_args = user_input
+    .split("\\s")
+    .map(|s| s.trim())
+    .collect::<Vec<&str>>();
   match user_input_args.as_slice() {
     [] => return Command::Invalid("".to_string()),
     ["\\q"] => return Command::Quit,
     ["\\?"] => return Command::Help,
     ["\\h"] => return Command::Usage,
     [command, tail @ ..] => match *command {
-      "\\i" | "\\import" => {
-        match tail {
-          [path] => unimplemented!(),
-          [path, name] => unimplemented!(),
-          _ => return Command::Invalid(user_input),
-        }
-        println!(
-          "Command given: {:#?}, with args: {:#?}",
-          *command,
-          tail.to_vec()
-        );
-        unimplemented!();
-      }
+      "\\i" | "\\import" => match tail {
+        [path] => return Command::Import(path.to_string(), None),
+        [path, name] => return Command::Import(path.to_string(), Some(name.to_string())),
+        _ => return Command::Invalid(user_input),
+      },
       "\\e" | "\\export" => {
         match tail {
-          [path] => unimplemented!(),
-          [j @ "true", path] | [j @ "false", path] => unimplemented!(),
-          [n, path] => unimplemented!(),
-          [j, n, path] => unimplemented!(),
+          [path] => return Command::Export(false, 1, path.to_string()),
+          [j @ "true", path] | [j @ "false", path] => {
+            let use_json = if *j == "true" { true } else { false };
+            return Command::Export(use_json, 1, path.to_string());
+          }
+          [n, path] => {
+            let which_query;
+            match usize::from_str(n) {
+              Ok(num) => which_query = num,
+              _ => return Command::Invalid("Could not parse query number n.".to_string()),
+            };
+            return Command::Export(false, which_query, path.to_string());
+          }
+          [j, n, path] => {
+            let use_json = if *j == "true" { true } else { false };
+            let which_query;
+            match usize::from_str(n) {
+              Ok(num) => which_query = num,
+              _ => return Command::Invalid("Could not parse query number n.".to_string()),
+            };
+            return Command::Export(use_json, which_query, path.to_string());
+          }
           _ => return Command::Invalid(user_input),
         }
         println!(
@@ -139,50 +165,67 @@ fn into_command(user_input: String) -> Command {
   unimplemented!();
 }
 
-fn execute_command(query_history: &mut Buffer<Command>, command: Command) -> Repl {
+async fn execute_command<'a>(
+  query_history: &'a mut VecDeque<(Command, Table)>,
+  command: Command,
+) -> Repl<'a> {
+  // Get the querier
+  let db_url_string;
+  match env::var(DATABASE_URL_KEY) {
+    Ok(db_url) => db_url_string = db_url,
+    _ => return Repl::Quit,
+  }
+  let db_url = db_url_string.as_str();
+  // Handle this Error...
+  let db_querier = postgres::Querier::new("postgres", db_url).await.unwrap();
+
+  // Execute the given command
   match command {
     Command::Invalid(user_input) => print_invalid(user_input),
     Command::Quit => return Repl::Quit,
     Command::Help => less_help(),
     Command::Usage => less_usage(),
-    Command::Query(query) => {
-      let res = query_history.add(Command::Query(query.clone()));
-      match res {
-        Ok(Some(query_command)) => {
-          println!(
-            "
-            Successfully added query to query history {:#?}
-            Removed query {:#?} in the process
-            ",
-            query_history, query_command
-          );
-        }
-        Ok(None) => {
-          println!(
-            "
-            Successfully added query to query history {:#?}
-            ",
-            query_history
-          );
-        }
-        Err(e) => {
-          println!(
-            "
-            Failed to add query to query history.
-            Received following error {:#?}
-            ",
-            e
-          );
-          return Repl::Quit;
-        }
+    Command::Query(query_statement) => {
+      // handle this error.
+      let table = db_querier.query(query_statement.as_str()).await.unwrap();
+      if table.rows.len() > MAX_PRINTABLE_ROWS {
+        less::table(&table);
+      } else {
+        println!("{}", table);
       }
-      unimplemented!()
+      // TODO need to also add a table pointer as an element here...
+      let query_statement_result_pair = (Command::Query(query_statement.clone()), table);
+      query_history.evl_add(query_statement_result_pair);
     }
-    Command::Import(path) => {
-      unimplemented!()
+    Command::Import(path, optional_name) => {
+      // handle error
+      let mut table = Table::import(path::Path::new(path.as_str())).unwrap();
+      match optional_name {
+        Some(name) => table.set_name(name),
+        None => table.set_name(resolve::get_table_name_from_path(path.as_str())),
+      }
+      db_querier
+        .store(table.name.unwrap().as_str(), table.header, table.rows)
+        .await;
     }
     Command::Export(to_json, query_index, path) => {
-      unimplemented!()
+      // TODO Handle this error
+      let index = query_history.len() - query_index;
+      if index < 0 || index >= query_history.len() {
+        // TODO handle this error, don't just quit the repl
+        // return Repl::Quit;
+        return Repl::AlertThenContinue("Query could not be found.");
+      }
+      let (_query_statement, queried_table): (&Command, &Table);
+      match query_history.evl_get(index) {
+        Some((q, t)) => {
+          _query_statement = q;
+          queried_table = t;
+        }
+        None => return Repl::Quit,
+      }
+      let export_path = path::Path::new(path.as_str());
+      queried_table.export(&export_path, to_json);
     }
     Command::List(is_verbose) => {
       unimplemented!()
