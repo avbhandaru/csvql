@@ -79,6 +79,16 @@ impl Table {
     }
   }
 
+  pub fn with_header(header: Header) -> Self {
+    // Fix this up
+    Self {
+      name: None,
+      header: header,
+      rows: Vec::new(),
+      widths: Vec::new(),
+    }
+  }
+
   pub fn set_name(&mut self, name: String) {
     self.name = Some(name);
   }
@@ -105,12 +115,14 @@ impl Table {
 pub trait Purveyor {
   fn import(path: &path::Path) -> Result<Table>;
   fn export(&self, path: &path::Path, use_json: bool) -> Result<()>;
-  async fn load<Q>(name: String, db_querier: Q) -> Result<Table>
-  where
-    Q: querier::QuerierTrait + std::marker::Sync + std::marker::Send;
-  async fn store<Q>(&self, db_querier: Q) -> Result<()>
-  where
-    Q: querier::QuerierTrait + std::marker::Sync + std::marker::Send;
+
+  // async fn load<Q>(name: String, db_querier: Q) -> Result<Table>
+  // where
+  //   Q: querier::QuerierTrait + std::marker::Sync + std::marker::Send;
+
+  // async fn store<Q>(&self, db_querier: Q) -> Result<()>
+  // where
+  //   Q: querier::QuerierTrait + std::marker::Sync + std::marker::Send;
 }
 
 #[async_trait]
@@ -130,30 +142,33 @@ impl Purveyor for Table {
   }
 
   // Loads a Table from the database
-  async fn load<Q>(name: String, db_querier: Q) -> Result<Self>
-  where
-    Q: querier::QuerierTrait + std::marker::Sync + std::marker::Send,
-  {
-    Ok(db_querier.load(name.as_str()).await?)
-  }
 
-  // Stores a Table to the database
-  async fn store<Q>(&self, db_querier: Q) -> Result<()>
-  where
-    Q: querier::QuerierTrait + std::marker::Sync + std::marker::Send,
-  {
-    match self.name.clone() {
-      Some(name) => Ok(
-        db_querier
-          .store(name.as_str(), self.header.clone(), self.rows.clone())
-          .await?,
-      ),
-      None => Err(Error::new(
-        "No table name given.".to_string(),
-        SubError::BaseError,
-      )),
-    }
-  }
+  // async fn load<Q>(name: String, db_querier: Q) -> Result<Self>
+  // where
+  //   Q: querier::QuerierTrait + std::marker::Sync + std::marker::Send,
+  // {
+  //   Ok(db_querier.load(name.as_str()).await?)
+  // }
+
+  // // Stores a Table to the database
+
+  // async fn store<Q>(&self, db_querier: Q) -> Result<()>
+  // where
+  //   Q: querier::QuerierTrait + std::marker::Sync + std::marker::Send,
+  // {
+  //   match self.name.clone() {
+  //     Some(name) => Ok(
+  //       db_querier
+  //         // .store(name.as_str(), self.header.clone(), self.rows.clone())
+  //         .store(name.as_str(), self.header.clone())
+  //         .await?,
+  //     ),
+  //     None => Err(Error::new(
+  //       "No table name given.".to_string(),
+  //       SubError::BaseError,
+  //     )),
+  //   }
+  // }
 }
 
 impl fmt::Display for Table {

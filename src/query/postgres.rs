@@ -35,17 +35,22 @@ impl Querier {
 impl QuerierTrait for Querier {
   async fn store(
     &self,
+    table_path: &str,
     table_name: &str,
     table_header: table::Header,
-    table_data: table::Rows,
+    // table_data: table::Rows,
   ) -> Result<(), Error> {
     self
       .client
-      .query(create_table_query(&table_name, table_header).as_str(), &[])
+      .query(create_table_query(&table_name, &table_header).as_str(), &[])
       .await?;
     self
       .client
-      .query(insert_into_query(&table_name, table_data).as_str(), &[])
+      .query(
+        copy_into_query(&table_path, &table_name, &table_header).as_str(),
+        // insert_into_query(&table_name, &table_header, table_data).as_str(),
+        &[],
+      )
       .await?;
     Ok(())
   }
@@ -85,26 +90,82 @@ impl QuerierTrait for Querier {
       .query(format!("SELECT * FROM {}", table_name).as_str())
       .await
   }
+
+  async fn drop(&self, table_name: &str) -> Result<(), Error> {
+    match self.query(format!("DROP TABLE {}", table_name)).await {
+      Ok(_) => Ok(()),
+      Err(e) => Err(e),
+    }
+  }
 }
 
 // HELPERS
-fn create_table_query(table_name: &str, table_header: table::Header) -> String {
+fn create_table_query(table_name: &str, table_header: &table::Header) -> String {
   let schema = table_header
     .into_iter()
     .map(|(col_name, col_type)| format!("{} {}", col_name, col_type))
     .collect::<Vec<_>>()
     .join(",");
-  format!("CREATE TABLE {} ({})", table_name, schema)
+  let query = format!("CREATE TABLE {} ({})", table_name, schema);
+  // println!("{}", query);
+  query
 }
 
-fn insert_into_query(table_name: &str, table_data: table::Rows) -> String {
+/*
+  csvql_db=# COPY first_table (source,text,created_at,retweet_count,favorite_count,is_retweet,id_str)
+  csvql_db-# FROM '/Users/akhil/csvql/data/test.csv'
+  csvql_db-# DELIMITER ','
+  csvql_db-# CSV HEADER;
+*/
+fn copy_into_query(table_path: &str, name: &str, header: &table::Header) -> String {
+  let header = header
+    .into_iter()
+    .map(|(col_name, _)| col_name.as_str())
+    .collect::<Vec<_>>()
+    .join(",");
+  let query = format!(
+    "COPY {} ({}) FROM '{}' DELIMITER ',' CSV HEADER",
+    name, header, table_path
+  );
+  println!("query: {}", query);
+  query
+}
+
+// TODO --> consider removing, since we have copy
+//
+// MAKE SURE THIS IS WORKING
+//
+// Run with example in repl:
+// > \i /Users/akhil/csvql/data/test.csv first_table
+// > select * from first_table;
+fn insert_into_query(
+  table_name: &str,
+  table_header: &table::Header,
+  table_data: table::Rows,
+) -> String {
+  let header = table_header
+    .into_iter()
+    .map(|(col_name, _)| col_name.as_str())
+    .collect::<Vec<_>>()
+    .join(",");
   let values = table_data
     .into_iter()
     .map(|row| {
-      let row_values = row.join(",");
+      let row_values = row
+        .into_iter()
+        .map(|elt| {
+          // TODO perform some string validation and escapting:
+          // psql string with escapes is
+          // E'meow I like cats \\n meow he isn\\'t the coolest'
+          format!("'{}'", elt)
+        })
+        .collect::<Vec<_>>()
+        .join(",");
       format!("({})", row_values)
     })
     .collect::<Vec<_>>()
     .join(",");
-  format!("INSERT INTO {} VALUES ({})", table_name, values)
+  let query = format!("INSERT INTO {} ({}) VALUES {}", table_name, header, values);
+  println!("{}", query);
+  query
 }

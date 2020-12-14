@@ -2,6 +2,11 @@
  - Make formatting/cloning of headers and widths more efficient in table.rs/just pass refs
  - Remove cloning and understand rust borrowing and lifetimes to optimize.
  - Make `table::Table::new` return a `Box<Table>`. This is ideal since tables can be really large and we should keep track of them in the heap?
+ - Dynamic DB allocation/creation for csvql in particular
+ - drop all tables upon exiting repl/runtime
+	+ Keep track of all tables we created (will be useful for `List` command as well)
+	+ And drop all of the tables we created during the repl runtime experience
+ - GRACEFUL EXITING
 
 ## Misc Tracking
  - Pseudo-finalize `docs/commands.md`

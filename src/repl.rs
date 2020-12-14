@@ -63,6 +63,7 @@ pub async fn run() {
     }
 
     let user_input = lines.join(" ");
+    println!("User command: {}", user_input);
     let user_command = into_command(user_input);
     let result = execute_command(&mut query_history, user_command).await;
     match result {
@@ -85,9 +86,11 @@ fn into_command(user_input: String) -> Command {
   }
 
   let user_input_args = user_input
-    .split("\\s")
+    .split(" ")
+    .filter(|element| element != &"")
     .map(|s| s.trim())
     .collect::<Vec<&str>>();
+  println!("user input args: {:#?}", user_input_args);
   match user_input_args.as_slice() {
     [] => return Command::Invalid("".to_string()),
     ["\\q"] => return Command::Quit,
@@ -95,9 +98,21 @@ fn into_command(user_input: String) -> Command {
     ["\\h"] => return Command::Usage,
     [command, tail @ ..] => match *command {
       "\\i" | "\\import" => match tail {
-        [path] => return Command::Import(path.to_string(), None),
-        [path, name] => return Command::Import(path.to_string(), Some(name.to_string())),
-        _ => return Command::Invalid(user_input),
+        [path] => {
+          println!("import path: {}", path);
+          return Command::Import(path.to_string(), None);
+        }
+        [path, name] => {
+          println!("import path: {}, name: {}", path, name);
+          return Command::Import(path.to_string(), Some(name.to_string()));
+        }
+        _ => {
+          println!(
+            "import tail: {}",
+            if tail.len() > 0 { tail[0] } else { "[]" }
+          );
+          return Command::Invalid(user_input);
+        }
       },
       "\\e" | "\\export" => {
         match tail {
@@ -170,13 +185,9 @@ async fn execute_command<'a>(
   command: Command,
 ) -> Repl<'a> {
   // Get the querier
-  let db_url_string;
-  match env::var(DATABASE_URL_KEY) {
-    Ok(db_url) => db_url_string = db_url,
-    _ => return Repl::Quit,
-  }
+  // Handle these Errors...
+  let db_url_string = env::var(DATABASE_URL_KEY).unwrap();
   let db_url = db_url_string.as_str();
-  // Handle this Error...
   let db_querier = postgres::Querier::new("postgres", db_url).await.unwrap();
 
   // Execute the given command
@@ -198,17 +209,22 @@ async fn execute_command<'a>(
       query_history.evl_add(query_statement_result_pair);
     }
     Command::Import(path, optional_name) => {
+      // TODO: Perform path validation, make sure its real
       // handle error
       let mut table = Table::import(path::Path::new(path.as_str())).unwrap();
       match optional_name {
         Some(name) => table.set_name(name),
         None => table.set_name(resolve::get_table_name_from_path(path.as_str())),
-      }
+      };
+      // ABOVE: seems to work
+      // println!("Importing table!");
+      // less::table(&table);
       db_querier
-        .store(table.name.unwrap().as_str(), table.header, table.rows)
+        .store(path.as_str(), table.name.unwrap().as_str(), table.header)
         .await;
     }
     Command::Export(to_json, query_index, path) => {
+      // TODO: Perform path validation, make sure its real/or create it
       // TODO Handle this error
       let index = query_history.len() - query_index;
       if index < 0 || index >= query_history.len() {

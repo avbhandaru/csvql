@@ -49,6 +49,7 @@ async fn main() {
   // test_cli_works(options);
 
   // ## Test running repl
+  dotenv().ok();
   repl::run().await;
 
   // ## Test less command

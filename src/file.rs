@@ -41,26 +41,25 @@ impl std::error::Error for Error {}
 // }
 
 pub fn import_csv(path: &path::Path) -> Result<table::Table, Error> {
-  let lines = read_file(path)?
-    .into_iter()
-    .map(|line| line.split(",").map(String::from).collect())
-    .collect::<Vec<Vec<String>>>();
-  // println!("csv file:\n{:#?}", lines);
-  // remove later
-  if lines.len() == 0 {
+  // let lines = read_file(path)?
+  //   .into_iter()
+  //   .map(|line| line.split(",").map(String::from).collect())
+  //   .collect::<Vec<Vec<String>>>();
+  // // println!("csv file:\n{:#?}", lines);
+  // // remove later
+  let line = read_first_line(path)?;
+  if line.len() == 0 {
     Err(Error::new(
       path.to_str().unwrap().to_string(),
       "Failed to parse Table from file. Read in Zero lines.".to_string(),
     ))
   } else {
-    let header = lines
-      .get(0)
-      .unwrap()
-      .into_iter()
-      .map(|entry| (entry.clone(), "VARCHAR".to_string()))
+    let header = line
+      .split(",")
+      .map(|entry| (String::from(entry), "VARCHAR".to_string()))
       .collect::<table::Header>();
-    let rows = lines[1..].to_vec();
-    Ok(table::Table::new(header, rows))
+    // let rows = lines[1..].to_vec(); // Only need the header, since we're using sql COPY
+    Ok(table::Table::with_header(header))
   }
 }
 
@@ -87,6 +86,22 @@ pub fn export_json(path: &path::Path, table: &table::Table) -> Result<(), Error>
   // write_file(path, contents)?
   todo!();
   Ok(())
+}
+
+fn read_first_line(path: &path::Path) -> Result<String, Error> {
+  match fs::File::open(path) {
+    Ok(file) => {
+      let mut buffer = String::new();
+      io::BufReader::new(file)
+        .read_line(&mut buffer)
+        .expect("Reading first line of file.");
+      Ok(buffer)
+    }
+    Err(_) => Err(Error::new(
+      path.to_str().unwrap().to_string(),
+      "Failed to read first line of file.".to_string(),
+    )),
+  }
 }
 
 fn read_file(path: &path::Path) -> Result<Vec<String>, Error> {
