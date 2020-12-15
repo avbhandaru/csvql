@@ -68,7 +68,9 @@ pub fn export_csv(path: &path::Path, table: &table::Table) -> Result<(), Error> 
     .header
     .clone()
     .into_iter()
-    .map(|(col_name, col_type)| format!("{}({})", &col_name, &col_type))
+    // TODO: Uncomment below when support for type annotations is added
+    // .map(|(col_name, col_type)| format!("{}({})", &col_name, &col_type))
+    .map(|(col_name, _)| format!("{}", &col_name))
     .collect::<Vec<String>>()
     .join(",");
   let rows = table
@@ -77,7 +79,7 @@ pub fn export_csv(path: &path::Path, table: &table::Table) -> Result<(), Error> 
     .into_iter()
     .map(|row| row.join(","))
     .collect::<Vec<String>>()
-    .join(",");
+    .join("\n");
   write_file(path, format!("{}\n{}\n", header, rows))
 }
 

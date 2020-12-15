@@ -55,8 +55,11 @@ impl QuerierTrait for Querier {
     Ok(())
   }
 
-  async fn query(&self, query_statement: &str) -> Result<table::Table, Error> {
+  async fn query(&self, query_statement: &str) -> Result<Option<table::Table>, Error> {
     let rows: Vec<Row> = self.client.query(query_statement, &[]).await?;
+    if rows.len() == 0 {
+      return Ok(None);
+    }
 
     let header_response: table::Header = rows
       .get(0)
@@ -82,17 +85,20 @@ impl QuerierTrait for Querier {
       })
       .collect::<Vec<_>>();
 
-    Ok(table::Table::new(header_response, rows_response))
+    Ok(Some(table::Table::new(header_response, rows_response)))
   }
 
-  async fn load(&self, table_name: &str) -> Result<table::Table, Error> {
+  async fn load(&self, table_name: &str) -> Result<Option<table::Table>, Error> {
     self
       .query(format!("SELECT * FROM {}", table_name).as_str())
       .await
   }
 
   async fn drop(&self, table_name: &str) -> Result<(), Error> {
-    match self.query(format!("DROP TABLE {}", table_name)).await {
+    match self
+      .query(format!("DROP TABLE {}", table_name).as_str())
+      .await
+    {
       Ok(_) => Ok(()),
       Err(e) => Err(e),
     }
@@ -136,7 +142,7 @@ fn copy_into_query(table_path: &str, name: &str, header: &table::Header) -> Stri
 // MAKE SURE THIS IS WORKING
 //
 // Run with example in repl:
-// > \i /Users/akhil/csvql/data/test.csv first_table
+// > \i /Users/akhil/csvql/data/test.csv first
 // > select * from first_table;
 fn insert_into_query(
   table_name: &str,

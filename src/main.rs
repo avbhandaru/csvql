@@ -9,14 +9,19 @@ use clap::{crate_authors, crate_description, crate_version, App, Arg};
 use dotenv::dotenv;
 use query::{postgres, querier};
 use std::env;
-use std::path::PathBuf;
 
 #[tokio::main]
 async fn main() {
-  let _options = App::new("csvql")
+  let options = App::new("csvql")
     .version(crate_version!())
     .author(crate_authors!())
     .about(crate_description!())
+    .usage(
+      "
+      csvql [FLAGS]                             Opens REPL.
+      csvql [FLAGS] [-i imports]                Imports csv tables and opens REPL.
+      csvql [FLAGS] [OPTIONS]                   Execute queries, pre-importing tables and exporting query results to given csv output files."
+    )
     .arg(
       Arg::with_name("imports")
         .short("i")
@@ -45,38 +50,14 @@ async fn main() {
         .min_values(1),
     )
     .get_matches();
-  // ## Test cli works?
-  // test_cli_works(options);
 
-  // ## Test running repl
+  // Load in environment variables
   dotenv().ok();
-  repl::run().await;
 
-  // ## Test less command
-  // util::less::table("/Users/akhil/csvql/data/test.csv");
-}
-
-// TODO remove later
-fn _test_cli_works(options: clap::ArgMatches) {
-  println!("Options {:#?}", options);
-  if options.is_present("queries") {
-    let query_vector = options
-      .values_of("queries")
-      .unwrap()
-      .into_iter()
-      .map(PathBuf::from)
-      .collect::<Vec<_>>();
-    println!("Queries: {:#?}", query_vector);
-    println!(
-      "Query contents\n{:#?}",
-      query_vector
-        .into_iter()
-        .map(resolve::sql_table_paths)
-        .collect::<Vec<_>>()
-    );
-  }
-  dotenv().ok();
-  for (key, value) in env::vars() {
-    println!("==> {}: {}", key, value);
+  // Run repl if no queries were provided in command
+  if !options.is_present("queries") {
+    repl::run().await;
+  } else {
+    println!("Raw query execution is not supported yet!")
   }
 }

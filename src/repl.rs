@@ -1,18 +1,15 @@
-// #[macro_use]
-// use crate::util;
 use crate::query::{postgres, querier};
 use crate::resolve;
 use crate::table::{Purveyor, Table};
 use crate::util::{evict, less};
+
+use collections::HashSet;
 use collections::VecDeque;
 use evict::EvictingList;
 use querier::QuerierTrait;
-use queues::{Buffer, IsQueue};
-use regex::Regex;
-use std::fmt::Display;
 use std::io::{stdin, stdout, Write};
 use std::str::FromStr;
-use std::{collections, env, fmt, io, path};
+use std::{collections, env, path};
 
 const QUERY_HISTORY_CAPACITY: usize = 5;
 const MAX_PRINTABLE_ROWS: usize = 20;
@@ -38,15 +35,29 @@ enum Command {
 }
 
 pub async fn run() {
+  // TODO: both of these should be Box's. I don't know how large they might get
+  // so better to put them in heap. Although there is a chance they are auto
+  // placed in heap?
+  let mut tables_in_database: HashSet<String> = HashSet::new();
   let mut query_history: VecDeque<(Command, Table)> = VecDeque::evl_new(QUERY_HISTORY_CAPACITY);
+  // Get the querier
+  // Handle these Errors...
+  // This should be at repl level?
+  let db_url = env::var(DATABASE_URL_KEY).unwrap();
+  let db_querier = postgres::Querier::new("postgres", db_url.as_str())
+    .await
+    .unwrap();
+
+  // Read Eval Print Loop
   loop {
     print!("> ");
     flush_repl();
 
     let mut experienced_read_error = false;
     let mut lines: Vec<String> = Vec::new();
-    let mut line: String = String::new();
+    let mut line = String::new();
     while line_not_terminal(&line) && !experienced_read_error {
+      line = String::new();
       match stdin().read_line(&mut line) {
         Ok(_) => lines.push(line.trim().to_string()),
         Err(e) => {
@@ -65,13 +76,21 @@ pub async fn run() {
     let user_input = lines.join(" ");
     println!("User command: {}", user_input);
     let user_command = into_command(user_input);
-    let result = execute_command(&mut query_history, user_command).await;
+    let result = execute_command(
+      &mut tables_in_database,
+      &mut query_history,
+      &db_querier,
+      user_command,
+    )
+    .await;
     match result {
       Repl::Continue => continue,
       Repl::AlertThenContinue(alert) => println!("{}", alert),
       Repl::Quit => break,
     }
   }
+  // Clean up tables_in_database HashSet
+  clean_database(&mut tables_in_database, &db_querier).await;
   println!("");
 }
 
@@ -181,15 +200,11 @@ fn into_command(user_input: String) -> Command {
 }
 
 async fn execute_command<'a>(
+  tables_in_database: &'a mut HashSet<String>,
   query_history: &'a mut VecDeque<(Command, Table)>,
+  db_querier: &postgres::Querier,
   command: Command,
 ) -> Repl<'a> {
-  // Get the querier
-  // Handle these Errors...
-  let db_url_string = env::var(DATABASE_URL_KEY).unwrap();
-  let db_url = db_url_string.as_str();
-  let db_querier = postgres::Querier::new("postgres", db_url).await.unwrap();
-
   // Execute the given command
   match command {
     Command::Invalid(user_input) => print_invalid(user_input),
@@ -198,36 +213,61 @@ async fn execute_command<'a>(
     Command::Usage => less_usage(),
     Command::Query(query_statement) => {
       // handle this error.
-      let table = db_querier.query(query_statement.as_str()).await.unwrap();
-      if table.rows.len() > MAX_PRINTABLE_ROWS {
-        less::table(&table);
-      } else {
-        println!("{}", table);
+      let result = db_querier.query(query_statement.as_str()).await.unwrap();
+      match result {
+        Some(table) => {
+          if table.rows.len() > MAX_PRINTABLE_ROWS {
+            less::table(&table);
+          } else {
+            println!("{}", table);
+          }
+          // TODO need to also add a table pointer as an element here...
+          let query_statement_result_pair = (Command::Query(query_statement.clone()), table);
+          query_history.evl_add(query_statement_result_pair);
+        }
+        Option::None => return Repl::AlertThenContinue("Success!"),
       }
-      // TODO need to also add a table pointer as an element here...
-      let query_statement_result_pair = (Command::Query(query_statement.clone()), table);
-      query_history.evl_add(query_statement_result_pair);
     }
     Command::Import(path, optional_name) => {
       // TODO: Perform path validation, make sure its real
       // handle error
       let mut table = Table::import(path::Path::new(path.as_str())).unwrap();
+      let table_name;
       match optional_name {
-        Some(name) => table.set_name(name),
-        None => table.set_name(resolve::get_table_name_from_path(path.as_str())),
+        Some(name) => {
+          table_name = name.clone();
+          table.set_name(name);
+        }
+        None => {
+          table_name = resolve::get_table_name_from_path(path.as_str());
+          table.set_name(table_name.clone())
+        }
       };
       // ABOVE: seems to work
       // println!("Importing table!");
       // less::table(&table);
-      db_querier
+      let result = db_querier
         .store(path.as_str(), table.name.unwrap().as_str(), table.header)
         .await;
+      match result {
+        Ok(_) => {
+          let insert_result = tables_in_database.insert(table_name);
+          if !insert_result {
+            // This shouldn't happen, if there is naming issue in the database
+            // We would be in the Err(_) branch of the match
+            return Repl::AlertThenContinue(
+              "Failure. Unable to import table. Perhaps choose a different name.",
+            );
+          }
+        }
+        Err(_) => return Repl::AlertThenContinue("Failure. Unable to import table."),
+      }
     }
     Command::Export(to_json, query_index, path) => {
       // TODO: Perform path validation, make sure its real/or create it
       // TODO Handle this error
       let index = query_history.len() - query_index;
-      if index < 0 || index >= query_history.len() {
+      if index >= query_history.len() {
         // TODO handle this error, don't just quit the repl
         // return Repl::Quit;
         return Repl::AlertThenContinue("Query could not be found.");
@@ -252,6 +292,15 @@ async fn execute_command<'a>(
   }
 
   Repl::Continue
+}
+
+async fn clean_database(tables_in_database: &mut HashSet<String>, db_querier: &postgres::Querier) {
+  for table_name in tables_in_database.iter() {
+    match db_querier.drop(table_name.as_str()).await {
+      Ok(_) => (),
+      Err(_e) => println!("Failure. Could not clean database/i.e. drop tables."),
+    }
+  }
 }
 
 fn flush_repl() {

@@ -11,7 +11,7 @@ pub trait QuerierTrait {
     table_header: table::Header,
     // table_data: table::Rows,
   ) -> Result<(), Error>;
-  async fn load(&self, table_name: &str) -> Result<table::Table, Error>;
-  async fn query(&self, query_statement: &str) -> Result<table::Table, Error>;
+  async fn load(&self, table_name: &str) -> Result<Option<table::Table>, Error>;
+  async fn query(&self, query_statement: &str) -> Result<Option<table::Table>, Error>;
   async fn drop(&self, table_name: &str) -> Result<(), Error>;
 }
