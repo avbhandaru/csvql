@@ -19,3 +19,5 @@ tokio = { version = "0.3", features = ["full"] }
 async-trait = "0.1.42"
 serde = { version = "1.0.118", features = ["derive"] }
 ansi_term = "0.12.1"
+rustyline = "7.1.0"
+rustyline-derive = "0.4.0"

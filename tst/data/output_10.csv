@@ -1,0 +1,8 @@
+column_name
+source
+text
+created_at
+retweet_count
+favorite_count
+is_retweet
+id_str

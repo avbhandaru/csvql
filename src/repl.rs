@@ -7,6 +7,15 @@ use collections::HashSet;
 use collections::VecDeque;
 use evict::EvictingList;
 use querier::QuerierTrait;
+use rustyline::completion::Completer;
+use rustyline::config::{Configurer, OutputStreamType};
+use rustyline::error::ReadlineError;
+use rustyline::highlight::{Highlighter, MatchingBracketHighlighter};
+use rustyline::hint::{Hinter, HistoryHinter};
+use rustyline::validate::{ValidationContext, ValidationResult, Validator};
+use rustyline::Editor;
+use rustyline::{Cmd, CompletionType, Config, EditMode, KeyCode, KeyEvent, Modifiers, Movement};
+use rustyline_derive::{Completer, Helper, Highlighter, Hinter};
 use std::io::{stdin, stdout, Write};
 use std::str::FromStr;
 use std::{collections, env, path};
@@ -34,6 +43,34 @@ enum Command {
   Info(bool, String),             // Show concise or verbose information on a table
 }
 
+#[derive(Completer, Helper, Highlighter, Hinter)]
+struct InputValidator {
+  highlighter: MatchingBracketHighlighter,
+  hinter: HistoryHinter,
+}
+
+impl Validator for InputValidator {
+  fn validate(&self, ctx: &mut ValidationContext) -> Result<ValidationResult, ReadlineError> {
+    use ValidationResult::{Incomplete, Valid};
+    let input = ctx.input();
+    let result = if line_not_terminal(input) {
+      Incomplete
+    } else {
+      Valid(None)
+    };
+    return Ok(result);
+    // let input = ctx.input();
+    // let result = if !input.starts_with("SELECT") {
+    //     Invalid(Some(" --< Expect: SELECT stmt".to_owned()))
+    // } else if !input.ends_with(';') {
+    //     Incomplete
+    // } else {
+    //     Valid(None)
+    // };
+    // Ok(result)
+  }
+}
+
 pub async fn run() {
   // TODO: both of these should be Box's. I don't know how large they might get
   // so better to put them in heap. Although there is a chance they are auto
@@ -48,33 +85,95 @@ pub async fn run() {
     .await
     .unwrap();
 
+  // rustyline reader configuration
+  let config = Config::builder()
+    .history_ignore_space(true)
+    .history_ignore_dups(true)
+    .completion_type(CompletionType::List)
+    .edit_mode(EditMode::Emacs)
+    .output_stream(OutputStreamType::Stdout)
+    .build();
+  let helper = InputValidator {
+    highlighter: MatchingBracketHighlighter::new(),
+    hinter: HistoryHinter {},
+  };
+  let mut reader = Editor::with_config(config);
+  reader.set_helper(Some(helper));
+  reader.bind_sequence(KeyEvent::alt('N'), Cmd::HistorySearchForward);
+  reader.bind_sequence(KeyEvent::alt('P'), Cmd::HistorySearchBackward);
+  // indents the entire start of line... not just from location... todo! fix
+  reader.bind_sequence(
+    KeyEvent::new('\t', Modifiers::NONE),
+    Cmd::Indent(Movement::ForwardChar(4)),
+  );
+  reader.bind_sequence(
+    KeyEvent::new('\t', Modifiers::SHIFT),
+    Cmd::Indent(Movement::BackwardChar(4)), // KNOWN ISSUE: not correctly backtabbing
+  );
+  reader.set_max_history_size(50);
+  // reader.set_tab_stop(4);
+  // reader.set_indent_size(4);
+  if reader.load_history("history.txt").is_err() {
+    // println!("No previous history.");
+    () // do nothing, but auto create the history.txt file
+  }
+
   // Read Eval Print Loop
   loop {
-    print!("> ");
-    flush_repl();
+    // print!(">>> ");
+    // flush_repl();
 
-    let mut experienced_read_error = false;
-    let mut lines: Vec<String> = Vec::new();
-    let mut line = String::new();
-    while line_not_terminal(&line) && !experienced_read_error {
-      line = String::new();
-      match stdin().read_line(&mut line) {
-        Ok(_) => lines.push(line.trim().to_string()),
-        Err(e) => {
-          print_error(e);
-          experienced_read_error = true;
-        }
+    // TODO: try out rustyline
+    let user_input;
+    let readline = reader.readline("[in]:\n");
+    match readline {
+      Ok(line) => {
+        reader.add_history_entry(line.as_str());
+        user_input = line;
       }
-      print!("  ");
-      flush_repl();
+      Err(ReadlineError::Interrupted) => {
+        println!("CTRL-C");
+        break;
+      }
+      Err(ReadlineError::Eof) => {
+        println!("CTRL-D");
+        break;
+      }
+      Err(err) => {
+        println!("Error: {:?}", err);
+        break;
+      }
     }
-    println!("");
-    if experienced_read_error {
-      continue;
-    }
+    // println!("userinput: {}", user_input);
+    println!("\n[out]:");
+    // Ok(())
 
-    let user_input = lines.join(" ");
-    println!("User command: {}", user_input);
+    // let mut experienced_read_error = false;
+    // let mut lines: Vec<String> = Vec::new();
+    // while !experienced_read_error {
+
+    //   let mut line = String::new();
+    //   match stdin().read_line(&mut line) {
+    //     Ok(_) => lines.push(line.trim().to_string()),
+    //     Err(e) => {
+    //       print_error(e);
+    //       experienced_read_error = true;
+    //     }
+    //   }
+    //   if line_not_terminal(&line) {
+    //     print!("... ");
+    //     flush_repl();
+    //   } else {
+    //     break;
+    //   }
+    // }
+    // println!("");
+    // if experienced_read_error {
+    //   continue;
+    // }
+
+    // let user_input = lines.join(" ");
+    // println!("User command: {}", user_input);
     let user_command = into_command(user_input);
     let result = execute_command(
       &mut tables_in_database,
@@ -83,6 +182,7 @@ pub async fn run() {
       user_command,
     )
     .await;
+    println!("");
     match result {
       Repl::Continue => continue,
       Repl::AlertThenContinue(alert) => println!("{}", alert),
@@ -90,6 +190,10 @@ pub async fn run() {
     }
   }
   // Clean up tables_in_database HashSet
+  match reader.append_history("history.txt") {
+    Err(e) => println!("Could not append to history. Error: {:#?}", e),
+    _ => (),
+  }
   clean_database(&mut tables_in_database, &db_querier).await;
   println!("");
 }
@@ -109,7 +213,7 @@ fn into_command(user_input: String) -> Command {
     .filter(|element| element != &"")
     .map(|s| s.trim())
     .collect::<Vec<&str>>();
-  println!("user input args: {:#?}", user_input_args);
+  // println!("user input args: {:#?}", user_input_args);
   match user_input_args.as_slice() {
     [] => return Command::Invalid("".to_string()),
     ["\\q"] => return Command::Quit,
@@ -213,7 +317,12 @@ async fn execute_command<'a>(
     Command::Usage => less_usage(),
     Command::Query(query_statement) => {
       // handle this error.
-      let result = db_querier.query(query_statement.as_str()).await.unwrap();
+      let result = db_querier.query(query_statement.as_str()).await;
+      match result {
+        Err(_) => return Repl::AlertThenContinue("Failure. Query syntax error."),
+        _ => (),
+      }
+      let result = result.unwrap();
       match result {
         Some(table) => {
           if table.rows.len() > MAX_PRINTABLE_ROWS {

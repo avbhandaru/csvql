@@ -6,7 +6,7 @@ use std::process::{Command, Stdio};
 // TODO use this functions for all tables with rows > 20 and for help and usage info
 // TODO clean up this code/refactor to get rid of duplication.
 pub fn file(path: &str) {
-  std::process::Command::new("less")
+  Command::new("less")
     .arg(std::path::Path::new(path).as_os_str())
     .spawn()
     .expect(format!("Failed to spawn (less {}) process.", path).as_str())

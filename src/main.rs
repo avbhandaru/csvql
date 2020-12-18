@@ -58,6 +58,7 @@ async fn main() {
   if !options.is_present("queries") {
     repl::run().await;
   } else {
-    println!("Raw query execution is not supported yet!")
+    println!("Raw query execution is not supported yet!");
+    println!("Notice: Version 2 of [csvql] will be built ontop of dbcli or pgcli");
   }
 }

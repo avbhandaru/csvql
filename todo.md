@@ -61,6 +61,7 @@
  - Rainbow CSV/table viewing?
  - Improve Table formatting
  - Improve error handling for `file.rs`. Would be good if I could pass args from original error clause to the `From<OriginatingError>` to `file::Error`!
+ - Figure out working directory/and relative paths in rust
 
 ## Bug Tracking
  - n/a todo
