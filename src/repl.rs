@@ -108,7 +108,7 @@ pub async fn run() {
   );
   reader.bind_sequence(
     KeyEvent::new('\t', Modifiers::SHIFT),
-    Cmd::Indent(Movement::BackwardChar(4)), // KNOWN ISSUE: not correctly backtabbing
+    Cmd::Dedent(Movement::BackwardChar(4)),
   );
   reader.set_max_history_size(50);
   // reader.set_tab_stop(4);

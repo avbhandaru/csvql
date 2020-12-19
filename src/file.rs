@@ -56,7 +56,8 @@ pub fn import_csv(path: &path::Path) -> Result<table::Table, Error> {
   } else {
     let header = line
       .split(",")
-      .map(|entry| (String::from(entry), "VARCHAR".to_string()))
+      // TODO let type be dynamic and grab type annotations from csv headers
+      .map(|entry| (String::from(entry), "VARCHAR(512)".to_string()))
       .collect::<table::Header>();
     // let rows = lines[1..].to_vec(); // Only need the header, since we're using sql COPY
     Ok(table::Table::with_header(header))
