@@ -218,6 +218,16 @@ impl clone::Clone for Table {
   }
 }
 
+pub fn vec_to_table(column_name: &str, vector: &Vec<String>) -> Table {
+  // TODO include a type
+  let header = vec![(String::from(column_name), String::from("VARCHAR(256)"))];
+  let rows = vector
+    .into_iter()
+    .map(|entry| vec![String::from(entry)])
+    .collect::<Vec<_>>();
+  Table::new(header, rows)
+}
+
 fn get_widths(header: &Header, rows: &Rows) -> Widths {
   let column_headers = header
     .into_iter()

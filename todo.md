@@ -7,7 +7,7 @@
 	+ Keep track of all tables we created (will be useful for `List` command as well)
 	+ And drop all of the tables we created during the repl runtime experience
  - GRACEFUL EXITING
- - Handle giant table buffers? Learn to print in chunks rather than all at once? With the `Less` command this causes a "too many arguments" error within the terminal (i.e. max string size is limited by ~1/4 stack size)
+ - HANDLE GIANT TABLE buffers? Learn to print in chunks rather than all at once? With the `Less` command this causes a "too many arguments" error within the terminal (i.e. max string size is limited by ~1/4 stack size)
 	+ Reproduce using:
 	```shell
 	> \i /Users/akhil/csvql/data/test.csv first
@@ -28,6 +28,7 @@
 		ON first.id_str = second.id_str;
 	```
 	+ This is because `id_str` is a unique id
+ - GET Postgres to Rust TYPE CONVERSIONS WORKING WHEN QUERYING!
 
 ## Misc Tracking
  - Pseudo-finalize `docs/commands.md`

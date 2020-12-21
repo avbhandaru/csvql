@@ -14,4 +14,6 @@ pub trait QuerierTrait {
   async fn load(&self, table_name: &str) -> Result<Option<table::Table>, Error>;
   async fn query(&self, query_statement: &str) -> Result<Option<table::Table>, Error>;
   async fn drop(&self, table_name: &str) -> Result<(), Error>;
+  async fn list(&self) -> Result<Option<table::Table>, Error>;
+  async fn info(&self, table_name: &str, is_verbose: bool) -> Result<Option<table::Table>, Error>;
 }

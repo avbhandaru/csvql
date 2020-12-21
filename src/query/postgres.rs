@@ -103,6 +103,16 @@ impl QuerierTrait for Querier {
       Err(e) => Err(e),
     }
   }
+
+  async fn list(&self) -> Result<Option<table::Table>, Error> {
+    self.query(list_tables_query().as_str()).await
+  }
+
+  async fn info(&self, table_name: &str, is_verbose: bool) -> Result<Option<table::Table>, Error> {
+    self
+      .query(get_table_info_query(table_name, is_verbose).as_str())
+      .await
+  }
 }
 
 // HELPERS
@@ -133,8 +143,80 @@ fn copy_into_query(table_path: &str, name: &str, header: &table::Header) -> Stri
     "COPY {} ({}) FROM '{}' DELIMITER ',' CSV HEADER",
     name, header, table_path
   );
-  println!("query: {}", query);
+  // println!("query: {}", query);
   query
+}
+
+fn list_tables_query() -> String {
+  let query = format!(
+    "
+    SELECT
+      n.nspname AS \"Schema\",
+      c.relname AS \"Table\",
+      CASE
+        WHEN c.relkind = 'r' THEN 'table'
+        WHEN c.relkind = 'i' THEN 'index'
+        WHEN c.relkind = 'S' THEN 'sequence'
+        WHEN c.relkind = 'v' THEN 'view'
+        WHEN c.relkind = 'f' THEN 'foreign table'
+      END AS \"Type\",
+      a.rolname AS \"Owner\"
+    FROM pg_catalog.pg_class c
+      LEFT JOIN pg_catalog.pg_namespace n
+      ON n.oid = c.relnamespace
+      LEFT JOIN pg_catalog.pg_authid a
+      ON c.relowner = a.oid
+    WHERE c.relkind = ANY (ARRAY['r', 'i', 'S', 'p', 'f', 'v'])
+      AND n.nspname = 'public'
+    ORDER BY 1,2;
+    "
+  );
+  query
+}
+
+fn get_table_info_query(table_name: &str, is_verbose: bool) -> String {
+  if is_verbose {
+    let query = format!(
+      "
+      SELECT
+        a.attname AS \"Column\",
+        pg_catalog.format_type(a.atttypid, a.atttypmod) AS \"Datatype\",
+        CASE
+          WHEN a.atthasdef THEN pg_get_expr(d.adbin, d.adrelid)
+          ELSE '-'
+        END AS \"Default\",
+        CASE
+          WHEN NOT a.attnotnull THEN 'true'
+          ELSE 'false'
+        END AS \"Nullable\"
+      FROM pg_catalog.pg_attribute a
+        LEFT JOIN pg_catalog.pg_attrdef d on a.attnum = d.adnum
+      WHERE
+        a.attnum > 0
+        AND NOT a.attisdropped
+        AND a.attrelid = (
+          SELECT c.oid
+          FROM pg_catalog.pg_class c
+            LEFT JOIN pg_catalog.pg_namespace n on n.oid = c.relnamespace
+          WHERE c.relname = '{}' AND pg_catalog.pg_table_is_visible(c.oid)
+        )
+      ",
+      table_name
+    );
+    query
+  } else {
+    let query = format!(
+      "
+      SELECT
+        column_name AS \"Column\",
+        data_type AS \"Datatype\"
+      FROM information_schema.columns
+      WHERE (table_schema, table_name) = ('public', '{}');
+      ",
+      table_name
+    );
+    query
+  }
 }
 
 // TODO --> consider removing, since we have copy
@@ -172,6 +254,5 @@ fn insert_into_query(
     .collect::<Vec<_>>()
     .join(",");
   let query = format!("INSERT INTO {} ({}) VALUES {}", table_name, header, values);
-  println!("{}", query);
   query
 }

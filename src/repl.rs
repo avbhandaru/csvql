@@ -1,6 +1,6 @@
 use crate::query::{postgres, querier};
 use crate::resolve;
-use crate::table::{Purveyor, Table};
+use crate::table::{vec_to_table, Purveyor, Table};
 use crate::util::{evict, less};
 
 use collections::HashSet;
@@ -17,6 +17,7 @@ use rustyline::Editor;
 use rustyline::{Cmd, CompletionType, Config, EditMode, KeyCode, KeyEvent, Modifiers, Movement};
 use rustyline_derive::{Completer, Helper, Highlighter, Hinter};
 use std::io::{stdin, stdout, Write};
+use std::iter::FromIterator;
 use std::str::FromStr;
 use std::{collections, env, path};
 
@@ -59,15 +60,6 @@ impl Validator for InputValidator {
       Valid(None)
     };
     return Ok(result);
-    // let input = ctx.input();
-    // let result = if !input.starts_with("SELECT") {
-    //     Invalid(Some(" --< Expect: SELECT stmt".to_owned()))
-    // } else if !input.ends_with(';') {
-    //     Incomplete
-    // } else {
-    //     Valid(None)
-    // };
-    // Ok(result)
   }
 }
 
@@ -110,9 +102,7 @@ pub async fn run() {
     KeyEvent::new('\t', Modifiers::SHIFT),
     Cmd::Dedent(Movement::BackwardChar(4)),
   );
-  reader.set_max_history_size(50);
-  // reader.set_tab_stop(4);
-  // reader.set_indent_size(4);
+  reader.set_max_history_size(100);
   if reader.load_history("history.txt").is_err() {
     // println!("No previous history.");
     () // do nothing, but auto create the history.txt file
@@ -120,10 +110,6 @@ pub async fn run() {
 
   // Read Eval Print Loop
   loop {
-    // print!(">>> ");
-    // flush_repl();
-
-    // TODO: try out rustyline
     let user_input;
     let readline = reader.readline("[in]:\n");
     match readline {
@@ -144,36 +130,8 @@ pub async fn run() {
         break;
       }
     }
-    // println!("userinput: {}", user_input);
     println!("\n[out]:");
-    // Ok(())
 
-    // let mut experienced_read_error = false;
-    // let mut lines: Vec<String> = Vec::new();
-    // while !experienced_read_error {
-
-    //   let mut line = String::new();
-    //   match stdin().read_line(&mut line) {
-    //     Ok(_) => lines.push(line.trim().to_string()),
-    //     Err(e) => {
-    //       print_error(e);
-    //       experienced_read_error = true;
-    //     }
-    //   }
-    //   if line_not_terminal(&line) {
-    //     print!("... ");
-    //     flush_repl();
-    //   } else {
-    //     break;
-    //   }
-    // }
-    // println!("");
-    // if experienced_read_error {
-    //   continue;
-    // }
-
-    // let user_input = lines.join(" ");
-    // println!("User command: {}", user_input);
     let user_command = into_command(user_input);
     let result = execute_command(
       &mut tables_in_database,
@@ -222,85 +180,53 @@ fn into_command(user_input: String) -> Command {
     [command, tail @ ..] => match *command {
       "\\i" | "\\import" => match tail {
         [path] => {
-          println!("import path: {}", path);
           return Command::Import(path.to_string(), None);
         }
         [path, name] => {
-          println!("import path: {}, name: {}", path, name);
           return Command::Import(path.to_string(), Some(name.to_string()));
         }
         _ => {
-          println!(
-            "import tail: {}",
-            if tail.len() > 0 { tail[0] } else { "[]" }
-          );
           return Command::Invalid(user_input);
         }
       },
-      "\\e" | "\\export" => {
-        match tail {
-          [path] => return Command::Export(false, 1, path.to_string()),
-          [j @ "true", path] | [j @ "false", path] => {
-            let use_json = if *j == "true" { true } else { false };
-            return Command::Export(use_json, 1, path.to_string());
-          }
-          [n, path] => {
-            let which_query;
-            match usize::from_str(n) {
-              Ok(num) => which_query = num,
-              _ => return Command::Invalid("Could not parse query number n.".to_string()),
-            };
-            return Command::Export(false, which_query, path.to_string());
-          }
-          [j, n, path] => {
-            let use_json = if *j == "true" { true } else { false };
-            let which_query;
-            match usize::from_str(n) {
-              Ok(num) => which_query = num,
-              _ => return Command::Invalid("Could not parse query number n.".to_string()),
-            };
-            return Command::Export(use_json, which_query, path.to_string());
-          }
-          _ => return Command::Invalid(user_input),
+      "\\e" | "\\export" => match tail {
+        [path] => return Command::Export(false, 1, path.to_string()),
+        [j @ "true", path] | [j @ "false", path] => {
+          let use_json = if *j == "true" { true } else { false };
+          return Command::Export(use_json, 1, path.to_string());
         }
-        println!(
-          "Command given: {:#?}, with args: {:#?}",
-          *command,
-          tail.to_vec()
-        );
-        unimplemented!();
-      }
-      "\\d" => {
-        match tail {
-          [] => unimplemented!(),
-          [name] => unimplemented!(),
-          _ => return Command::Invalid(user_input),
+        [n, path] => {
+          let which_query;
+          match usize::from_str(n) {
+            Ok(num) => which_query = num,
+            _ => return Command::Invalid("Could not parse query number n.".to_string()),
+          };
+          return Command::Export(false, which_query, path.to_string());
         }
-        println!(
-          "Command given: {:#?}, with args: {:#?}",
-          *command,
-          tail.to_vec()
-        );
-        unimplemented!();
-      }
-      "\\d+" => {
-        match tail {
-          [] => unimplemented!(),
-          [name] => unimplemented!(),
-          _ => return Command::Invalid(user_input),
+        [j, n, path] => {
+          let use_json = if *j == "true" { true } else { false };
+          let which_query;
+          match usize::from_str(n) {
+            Ok(num) => which_query = num,
+            _ => return Command::Invalid("Could not parse query number n.".to_string()),
+          };
+          return Command::Export(use_json, which_query, path.to_string());
         }
-        println!(
-          "Command given: {:#?}, with args: {:#?}",
-          *command,
-          tail.to_vec()
-        );
-        unimplemented!();
-      }
+        _ => return Command::Invalid(user_input),
+      },
+      "\\d" => match tail {
+        [] => return Command::List(false),
+        [name] => return Command::Info(false, String::from(*name)),
+        _ => return Command::Invalid(user_input),
+      },
+      "\\d+" => match tail {
+        [] => return Command::List(true),
+        [name] => return Command::Info(true, String::from(*name)),
+        _ => return Command::Invalid(user_input),
+      },
       _ => return Command::Invalid(user_input),
     },
   }
-
-  unimplemented!();
 }
 
 async fn execute_command<'a>(
@@ -325,11 +251,7 @@ async fn execute_command<'a>(
       let result = result.unwrap();
       match result {
         Some(table) => {
-          if table.rows.len() > MAX_PRINTABLE_ROWS {
-            less::table(&table);
-          } else {
-            println!("{}", table);
-          }
+          print_table(&table);
           // TODO need to also add a table pointer as an element here...
           let query_statement_result_pair = (Command::Query(query_statement.clone()), table);
           query_history.evl_add(query_statement_result_pair);
@@ -393,10 +315,46 @@ async fn execute_command<'a>(
       queried_table.export(&export_path, to_json);
     }
     Command::List(is_verbose) => {
-      unimplemented!()
+      if !is_verbose {
+        // TODO, remove this clone... I shouldn't have to clone this
+        println!(
+          "{}",
+          vec_to_table(
+            "Tables",
+            &Vec::from_iter(tables_in_database.clone().into_iter())
+          )
+        );
+        return Repl::Continue;
+      }
+
+      // Verbose table listing
+      let result = db_querier.list().await;
+      match result {
+        Ok(None) => {
+          // TODO, remove this clone... I shouldn't have to clone this
+          println!(
+            "{}",
+            vec_to_table(
+              "Tables",
+              &Vec::from_iter(tables_in_database.clone().into_iter())
+            )
+          );
+          return Repl::Continue;
+        }
+        Err(_) => return Repl::AlertThenContinue("Failure. Internal table list error."),
+        _ => (),
+      }
+      let table = result.unwrap().unwrap();
+      print_table(&table);
     }
     Command::Info(is_verbose, name) => {
-      unimplemented!()
+      let result = db_querier.info(name.as_str(), is_verbose).await;
+      match result {
+        Ok(None) | Err(_) => return Repl::AlertThenContinue("Failure. Table not found."),
+        _ => (),
+      }
+      let table = result.unwrap().unwrap();
+      print_table(&table);
     }
   }
 
@@ -427,6 +385,14 @@ fn line_not_terminal(line: &str) -> bool {
 fn line_is_invalid(line: &str) -> bool {
   let trimmed_line = line.trim();
   trimmed_line.starts_with("\\") && trimmed_line.ends_with(";")
+}
+
+fn print_table(table: &Table) {
+  if table.rows.len() > MAX_PRINTABLE_ROWS {
+    less::table(&table);
+  } else {
+    println!("{}", table);
+  }
 }
 
 fn print_error(err: std::io::Error) {
@@ -481,6 +447,7 @@ fn less_help() {
     Informational:
       \\d[+]            - list tables, views and sequences, with additional information if (+) is used
       \\d[+] name       - describe table, view, sequence, or index, with additional information if (+) is used
+      \\dd
     "
   );
   less::string(help);
