@@ -29,6 +29,7 @@
 	```
 	+ This is because `id_str` is a unique id
  - GET Postgres to Rust TYPE CONVERSIONS WORKING WHEN QUERYING!
+ - Pad table entries for pretty display
 
 ## Misc Tracking
  - Pseudo-finalize `docs/commands.md`

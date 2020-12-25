@@ -1,25 +1,27 @@
 use crate::query::{postgres, querier};
-use crate::resolve;
-use crate::table::{vec_to_table, Purveyor, Table};
-use crate::util::{evict, less};
+use crate::table::{vec_to_table_string, Purveyor, Table};
+use crate::util::{evict, less, validate};
 
+use ansi_term::Color;
+use ansi_term::Style;
 use collections::HashSet;
 use collections::VecDeque;
 use evict::EvictingList;
 use querier::QuerierTrait;
-use rustyline::completion::Completer;
-use rustyline::config::{Configurer, OutputStreamType};
+use rustyline::completion::{Completer, FilenameCompleter};
+use rustyline::config::{ColorMode, Configurer, OutputStreamType};
 use rustyline::error::ReadlineError;
 use rustyline::highlight::{Highlighter, MatchingBracketHighlighter};
 use rustyline::hint::{Hinter, HistoryHinter};
 use rustyline::validate::{ValidationContext, ValidationResult, Validator};
 use rustyline::Editor;
-use rustyline::{Cmd, CompletionType, Config, EditMode, KeyCode, KeyEvent, Modifiers, Movement};
+use rustyline::{Cmd, CompletionType, Config, EditMode, KeyEvent, Modifiers, Movement};
 use rustyline_derive::{Completer, Helper, Highlighter, Hinter};
 use std::io::{stdin, stdout, Write};
 use std::iter::FromIterator;
 use std::str::FromStr;
 use std::{collections, env, path};
+use validate::Validate;
 
 const QUERY_HISTORY_CAPACITY: usize = 5;
 const MAX_PRINTABLE_ROWS: usize = 20;
@@ -28,6 +30,7 @@ const DATABASE_URL_KEY: &str = "DATABASE_URL";
 enum Repl<'a> {
   Quit,
   Continue,
+  ClearAndContinue,
   AlertThenContinue(&'a str),
 }
 
@@ -42,12 +45,15 @@ enum Command {
   Export(bool, usize, String),    // Export a table into a csv/json output file
   List(bool),                     // List all tables, views, seqs concisely or verbosely
   Info(bool, String),             // Show concise or verbose information on a table
+  Clear,                          // Clears repl screen
 }
 
 #[derive(Completer, Helper, Highlighter, Hinter)]
 struct InputValidator {
   highlighter: MatchingBracketHighlighter,
   hinter: HistoryHinter,
+  completer: FilenameCompleter,
+  // colored_prompt: String,
 }
 
 impl Validator for InputValidator {
@@ -84,10 +90,13 @@ pub async fn run() {
     .completion_type(CompletionType::List)
     .edit_mode(EditMode::Emacs)
     .output_stream(OutputStreamType::Stdout)
+    // .color_mode(ColorMode::Enabled)
     .build();
   let helper = InputValidator {
     highlighter: MatchingBracketHighlighter::new(),
     hinter: HistoryHinter {},
+    completer: FilenameCompleter::new(),
+    // colored_prompt: "".to_owned(),
   };
   let mut reader = Editor::with_config(config);
   reader.set_helper(Some(helper));
@@ -109,12 +118,24 @@ pub async fn run() {
   }
 
   // Read Eval Print Loop
+  let mut count: i128 = -1;
   loop {
     let user_input;
-    let readline = reader.readline("[in]:\n");
+    count += 1;
+    // let prompt_text = format!("in[{}]:\n", count as u128);
+    let prompt_text = format!(
+      "{}[{}]:\n",
+      Color::Green.bold().paint("in"),
+      Style::new()
+        .dimmed()
+        .paint((count as u128).to_string().as_str())
+    );
+    let readline = reader.readline(&prompt_text);
     match readline {
       Ok(line) => {
-        reader.add_history_entry(line.as_str());
+        if should_be_saved_to_history(&line) {
+          reader.add_history_entry(line.as_str());
+        }
         user_input = line;
       }
       Err(ReadlineError::Interrupted) => {
@@ -130,7 +151,13 @@ pub async fn run() {
         break;
       }
     }
-    println!("\n[out]:");
+    println!(
+      "\n{}[{}]:",
+      Color::Blue.bold().paint("out"),
+      Style::new()
+        .dimmed()
+        .paint((count as u128).to_string().as_str())
+    );
 
     let user_command = into_command(user_input);
     let result = execute_command(
@@ -144,7 +171,14 @@ pub async fn run() {
     match result {
       Repl::Continue => continue,
       Repl::AlertThenContinue(alert) => println!("{}", alert),
-      Repl::Quit => break,
+      Repl::ClearAndContinue => {
+        print!("\x1B[2J\x1B[1;1H"); // Escape characters that clear screen
+        flush_repl();
+      }
+      Repl::Quit => {
+        println!("Goodbye!");
+        break;
+      }
     }
   }
   // Clean up tables_in_database HashSet
@@ -177,6 +211,7 @@ fn into_command(user_input: String) -> Command {
     ["\\q"] => return Command::Quit,
     ["\\?"] => return Command::Help,
     ["\\h"] => return Command::Usage,
+    ["\\c"] => return Command::Clear,
     [command, tail @ ..] => match *command {
       "\\i" | "\\import" => match tail {
         [path] => {
@@ -241,6 +276,7 @@ async fn execute_command<'a>(
     Command::Quit => return Repl::Quit,
     Command::Help => less_help(),
     Command::Usage => less_usage(),
+    Command::Clear => return Repl::ClearAndContinue,
     Command::Query(query_statement) => {
       // handle this error.
       let result = db_querier.query(query_statement.as_str()).await;
@@ -260,38 +296,70 @@ async fn execute_command<'a>(
       }
     }
     Command::Import(path, optional_name) => {
-      // TODO: Perform path validation, make sure its real
-      // handle error
-      let mut table = Table::import(path::Path::new(path.as_str())).unwrap();
-      let table_name;
-      match optional_name {
-        Some(name) => {
-          table_name = name.clone();
-          table.set_name(name);
-        }
-        None => {
-          table_name = resolve::get_table_name_from_path(path.as_str());
-          table.set_name(table_name.clone())
-        }
+      // Validate and Resolve the relative or absolute path
+      let path = path::Path::new(path.as_str());
+      let validator_result = path.validate();
+      match validator_result {
+        Err(_) => return Repl::AlertThenContinue("Invalid file path to import from."),
+        _ => (),
+      }
+
+      // Yield the pathInfo associated with the relative path given
+      let path_info = validator_result.unwrap();
+      if path_info.path.is_dir() {
+        return Repl::AlertThenContinue("Given path is to a directory. Must be a csv file.");
+      }
+
+      // Import table given the resolved absolute path
+      let import_result = Table::import(path_info.path.as_path());
+      match import_result {
+        Err(_) => return Repl::AlertThenContinue("Failure. Table import error occurred."),
+        _ => (),
+      }
+      let table_name = if optional_name == None {
+        path_info.filename.unwrap()
+      } else {
+        optional_name.unwrap()
       };
-      // ABOVE: seems to work
-      // println!("Importing table!");
-      // less::table(&table);
-      let result = db_querier
-        .store(path.as_str(), table.name.unwrap().as_str(), table.header)
-        .await;
-      match result {
-        Ok(_) => {
-          let insert_result = tables_in_database.insert(table_name);
-          if !insert_result {
-            // This shouldn't happen, if there is naming issue in the database
-            // We would be in the Err(_) branch of the match
-            return Repl::AlertThenContinue(
-              "Failure. Unable to import table. Perhaps choose a different name.",
-            );
+      let mut table = import_result.unwrap();
+      table.set_name(table_name.clone());
+
+      // If this table is alrady in the database then throw
+      let is_name_taken = tables_in_database.contains(&table_name);
+      if is_name_taken {
+        return Repl::AlertThenContinue("Failure. Table name already taken.");
+      } else {
+        // Insert table into database
+        let result_of_insert = tables_in_database.insert(table_name.clone());
+        if result_of_insert {
+          let absolute_path = path_info.path.as_os_str().to_str().unwrap();
+          let result_of_store = db_querier
+            .store(absolute_path, table.name.unwrap().as_str(), table.header)
+            .await;
+          match result_of_store {
+            Ok(_) => {
+              let result_of_load = db_querier.load(&table_name, Some(4)).await;
+              match result_of_load {
+                Ok(Some(table)) => {
+                  println!(
+                    "Success! Loaded TABLE[{}] into database. Printing the first 4 rows.\n",
+                    table_name
+                  );
+                  print_table(&table);
+                }
+                _ => (),
+              }
+              return Repl::Continue;
+            }
+            Err(e) => {
+              return Repl::AlertThenContinue(
+                "Failure. Error occurred while storing table in database",
+              )
+            }
           }
+        } else {
+          return Repl::AlertThenContinue("Failure. Unable to add table to database.");
         }
-        Err(_) => return Repl::AlertThenContinue("Failure. Unable to import table."),
       }
     }
     Command::Export(to_json, query_index, path) => {
@@ -319,7 +387,7 @@ async fn execute_command<'a>(
         // TODO, remove this clone... I shouldn't have to clone this
         println!(
           "{}",
-          vec_to_table(
+          vec_to_table_string(
             "Tables",
             &Vec::from_iter(tables_in_database.clone().into_iter())
           )
@@ -332,13 +400,7 @@ async fn execute_command<'a>(
       match result {
         Ok(None) => {
           // TODO, remove this clone... I shouldn't have to clone this
-          println!(
-            "{}",
-            vec_to_table(
-              "Tables",
-              &Vec::from_iter(tables_in_database.clone().into_iter())
-            )
-          );
+          println!("There are no tables in this database.");
           return Repl::Continue;
         }
         Err(_) => return Repl::AlertThenContinue("Failure. Internal table list error."),
@@ -385,6 +447,14 @@ fn line_not_terminal(line: &str) -> bool {
 fn line_is_invalid(line: &str) -> bool {
   let trimmed_line = line.trim();
   trimmed_line.starts_with("\\") && trimmed_line.ends_with(";")
+}
+
+fn should_be_saved_to_history(line: &str) -> bool {
+  line.ends_with(";")
+    || line.starts_with("\\i")
+    || line.starts_with("\\import")
+    || line.starts_with("\\e")
+    || line.starts_with("\\export")
 }
 
 fn print_table(table: &Table) {
@@ -448,6 +518,9 @@ fn less_help() {
       \\d[+]            - list tables, views and sequences, with additional information if (+) is used
       \\d[+] name       - describe table, view, sequence, or index, with additional information if (+) is used
       \\dd
+
+    Display:
+      \\x               - Expanded display toggle. If toggled on, then each column appears in its own row.
     "
   );
   less::string(help);

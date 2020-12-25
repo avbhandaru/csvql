@@ -1,6 +1,4 @@
 use crate::table;
-use crate::table::Purveyor;
-// use std::io::prelude::*;
 use std::process::{Command, Stdio};
 
 // TODO use this functions for all tables with rows > 20 and for help and usage info

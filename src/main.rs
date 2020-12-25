@@ -1,7 +1,6 @@
 mod file;
 mod query;
 mod repl;
-mod resolve;
 mod table;
 mod util;
 

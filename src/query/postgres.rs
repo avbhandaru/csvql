@@ -88,10 +88,18 @@ impl QuerierTrait for Querier {
     Ok(Some(table::Table::new(header_response, rows_response)))
   }
 
-  async fn load(&self, table_name: &str) -> Result<Option<table::Table>, Error> {
-    self
-      .query(format!("SELECT * FROM {}", table_name).as_str())
-      .await
+  async fn load(
+    &self,
+    table_name: &str,
+    num_rows: Option<usize>,
+  ) -> Result<Option<table::Table>, Error> {
+    let query;
+    if num_rows == None {
+      query = format!("SELECT * FROM {}", table_name);
+    } else {
+      query = format!("SELECT * FROM {} LIMIT {}", table_name, num_rows.unwrap())
+    }
+    self.query(query.as_str()).await
   }
 
   async fn drop(&self, table_name: &str) -> Result<(), Error> {
@@ -226,7 +234,7 @@ fn get_table_info_query(table_name: &str, is_verbose: bool) -> String {
 // Run with example in repl:
 // > \i /Users/akhil/csvql/data/test.csv first
 // > select * from first_table;
-fn insert_into_query(
+fn _insert_into_query(
   table_name: &str,
   table_header: &table::Header,
   table_data: table::Rows,

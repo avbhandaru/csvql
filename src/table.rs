@@ -1,5 +1,5 @@
 use crate::file;
-use crate::query::querier;
+// use crate::query::querier;
 use async_trait::async_trait;
 // use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{clone, fmt, path};
@@ -218,14 +218,18 @@ impl clone::Clone for Table {
   }
 }
 
-pub fn vec_to_table(column_name: &str, vector: &Vec<String>) -> Table {
+pub fn vec_to_table_string(column_name: &str, vector: &Vec<String>) -> String {
   // TODO include a type
   let header = vec![(String::from(column_name), String::from("VARCHAR(256)"))];
   let rows = vector
     .into_iter()
     .map(|entry| vec![String::from(entry)])
     .collect::<Vec<_>>();
-  Table::new(header, rows)
+  if rows.len() == 0 {
+    "There are no tables in this database.".to_string()
+  } else {
+    format!("{}", Table::new(header, rows))
+  }
 }
 
 fn get_widths(header: &Header, rows: &Rows) -> Widths {
