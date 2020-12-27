@@ -2,6 +2,7 @@ use crate::file;
 // use crate::query::querier;
 use async_trait::async_trait;
 // use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use ansi_term::Color;
 use std::{clone, fmt, path};
 use tokio_postgres::error as tokio_errors;
 
@@ -101,20 +102,75 @@ impl Table {
     self.rows = rows;
   }
 
-  fn fmt_row(widths: Widths, row: Row) -> String {
+  fn _fmt_table_name(name: &Option<String>) -> String {
+    match name {
+      Some(table_name) => format!("{}", Color::Yellow.underline().bold().paint(table_name)),
+      None => "".to_string(),
+    }
+  }
+
+  fn fmt_row(widths: &Widths, row: &Row) -> String {
     let zipper = widths.iter().zip(row.iter());
-    zipper
-      .map(|(width, entry)| format!("{}{}", entry, " ".repeat(width - entry.len())))
-      .collect::<Row>()
-      .join("|")
-      .to_string()
+    format!(
+      "|{}|",
+      zipper
+        // Adding space of padding on both sides
+        .map(|(width, entry)| format!(" {}{} ", entry, " ".repeat(width - entry.len())))
+        .collect::<Row>()
+        .join("|")
+    )
+  }
+
+  fn fmt_header(widths: &Widths, header: &Header) -> String {
+    let header_as_row = header
+      .clone()
+      .into_iter()
+      .map(|(column_header, _)| column_header)
+      .collect::<Vec<_>>();
+    let zipper = widths.iter().zip(header_as_row.iter());
+    format!(
+      "|{}|",
+      zipper
+        // Adding space of padding on both sides
+        .map(|(width, entry)| {
+          let formatted_header_entry = format!("{}", Color::Purple.bold().paint(entry));
+          format!(
+            " {}{} ",
+            formatted_header_entry,
+            " ".repeat(width - entry.len())
+          )
+        })
+        .collect::<Row>()
+        .join("|")
+    )
+  }
+
+  fn fmt_rows(widths: &Widths, rows: &Rows) -> Vec<String> {
+    rows
+      .into_iter()
+      .map(|row| Self::fmt_row(widths, row))
+      .collect()
+  }
+
+  fn fmt_row_separator(widths: &Widths) -> String {
+    let widths_len = widths.len();
+    format!(
+      "\n+{}+\n",
+      "-".repeat(
+        widths
+          .into_iter()
+          // widths_len - 1 is the number of | entry separators
+          // width + 2 is the length of the formatted entry with a space on both sides for padding
+          .fold(widths_len - 1, |acc, width| acc + width + 2)
+      )
+    )
   }
 }
 
 #[async_trait]
 pub trait Purveyor {
   fn import(path: &path::Path) -> Result<Table>;
-  fn export(&self, path: &path::Path, use_json: bool) -> Result<()>;
+  fn export(&self, path: &path::Path, use_json: Option<bool>, index: Option<usize>) -> Result<()>;
 
   // async fn load<Q>(name: String, db_querier: Q) -> Result<Table>
   // where
@@ -133,76 +189,41 @@ impl Purveyor for Table {
   }
 
   // Exports a Table to a csv or json file in the user file system
-  fn export(&self, path: &path::Path, use_json: bool) -> Result<()> {
-    if use_json {
+  fn export(&self, path: &path::Path, use_json: Option<bool>, index: Option<usize>) -> Result<()> {
+    // If no boolean is given then resolve using path file extensions
+    if use_json == None {
+      return Ok(file::export(index, path, self)?);
+    }
+
+    // If explicit boolean given then can just skip file extension resolution
+    // TODO: remove this and replace with just file::export, since that has parent path validation
+    if use_json.unwrap() {
       Ok(file::export_json(path, self)?)
     } else {
       Ok(file::export_csv(path, self)?)
     }
   }
-
-  // Loads a Table from the database
-
-  // async fn load<Q>(name: String, db_querier: Q) -> Result<Self>
-  // where
-  //   Q: querier::QuerierTrait + std::marker::Sync + std::marker::Send,
-  // {
-  //   Ok(db_querier.load(name.as_str()).await?)
-  // }
-
-  // // Stores a Table to the database
-
-  // async fn store<Q>(&self, db_querier: Q) -> Result<()>
-  // where
-  //   Q: querier::QuerierTrait + std::marker::Sync + std::marker::Send,
-  // {
-  //   match self.name.clone() {
-  //     Some(name) => Ok(
-  //       db_querier
-  //         // .store(name.as_str(), self.header.clone(), self.rows.clone())
-  //         .store(name.as_str(), self.header.clone())
-  //         .await?,
-  //     ),
-  //     None => Err(Error::new(
-  //       "No table name given.".to_string(),
-  //       SubError::BaseError,
-  //     )),
-  //   }
-  // }
 }
 
 impl fmt::Display for Table {
   fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-    // should probably throw an error if len of row/widths is 0
-    let formatted_header = Table::fmt_row(
-      self.widths.clone(),
-      self
-        .header
-        .clone()
-        .into_iter()
-        .map(|(column_header, _)| column_header)
-        .collect::<Vec<_>>(),
-    );
-    let widths_len = self.widths.len();
-    let separator = "-".repeat(
-      self
-        .widths
-        .clone()
-        .into_iter()
-        .fold(widths_len - 1, |acc, width| acc + width),
-    );
-    let formatted_rows = self
-      .rows
-      .clone()
-      .into_iter()
-      .map(|row| Table::fmt_row(self.widths.clone(), row))
-      .collect::<Vec<_>>();
+    let formatted_row_separator = Table::fmt_row_separator(&self.widths);
+    let formatted_header = Table::fmt_header(&self.widths, &self.header);
+    let formatted_rows = Table::fmt_rows(&self.widths, &self.rows);
+    // name
+    // ----
+    // head
+    // ----
+    // rows
+    // ----
     write!(
       formatter,
-      "{}\n{}\n{}\n",
+      "{}{}{}{}{}",
+      formatted_row_separator.strip_prefix("\n").unwrap(),
       formatted_header,
-      separator,
-      formatted_rows.join("\n")
+      formatted_row_separator,
+      formatted_rows.join(formatted_row_separator.as_str()),
+      formatted_row_separator
     )
   }
 }
@@ -218,7 +239,7 @@ impl clone::Clone for Table {
   }
 }
 
-pub fn vec_to_table_string(column_name: &str, vector: &Vec<String>) -> String {
+pub fn _vec_to_table_string(column_name: &str, vector: &Vec<String>) -> String {
   // TODO include a type
   let header = vec![(String::from(column_name), String::from("VARCHAR(256)"))];
   let rows = vector

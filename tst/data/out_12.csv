@@ -1,0 +1,51 @@
+source(TEXT),text(VARCHAR),created_at(TEXT),retweet_count(INT4),favorite_count(TEXT),is_retweet(BOOL),id_str(TEXT)
+Twitter Web Client,WIshing everyone a happy healthy and prosperous New Year!,12-30-2010 21:42:01,144,42,false,20595488004775936
+Twitter Web Client,Wishing everyone a very Happy Holiday season!,12-23-2010 16:26:18,109,55,false,17979321264115714
+Twitter Web Client,Don't forget to watch Larry King tonight CNN at 9 pm.  He's a television legend and a great friend. It's going to be a fantastic farewell.,12-16-2010 14:30:23,112,20,false,15413432119459840
+Twitter Web Client,I'll be appearing on Larry King Live for his final show Thursday night at 9 p.m. CNN. Larry's been on TV for 25 years...,12-14-2010 20:55:30,250,37,false,14785576859340800
+Twitter Web Client,...Trump International Hotel Las Vegas and Trump International Hotel & Tower Waikiki Beach Walk. http://tlworldsbest.roiresearch.com/.,12-13-2010 16:42:27,12,6,false,14359503306752000
+Twitter Web Client,Those five hotels includeTrump International Hotel & Tower New York Trump Soho New York Trump International Hotel & Tower Chicago...,12-13-2010 16:39:07,14,6,false,14358664722776064
+Twitter Web Client,All the hotels currently open in the Trump Hotel Collection have been nominated for Travel & Leisure's World's Best Awards 2011 .....,12-13-2010 16:30:47,24,8,false,14356570783617025
+Twitter Web Client,Congratulations to Brandy as our new Apprentice and to Clint for being a great player. It's been a terrific season!,12-10-2010 14:42:15,44,12,false,13242093694623744
+Twitter Web Client,Tonight is the Apprentice finale---and it's a fantastic episode in every way with the great Liza Minnelli performing and a new Apprentice!,12-09-2010 20:02:03,55,7,false,12960183131045888
+Twitter Web Client,Tonight's episode of The Apprentice is one of the best ever--we're down to the final 3 and it's high excitement all the way. 10 pm on NBC.,12-02-2010 15:32:49,24,3,false,10355715596091393
+Twitter Web Client,Congratulations to Evan Lysacek for being nominated SI sportsman of the year. He's a great guy and he has my vote!  #EvanForSI,11-29-2010 15:52:46,31,4,false,9273573134835712
+Twitter Web Client,My best wishes to everyone for a Happy Thanksgiving!,11-24-2010 18:41:32,69,15,false,7504103261347840
+Twitter Web Client,Tomorrow night's episode of The Apprentice delivers excitement at QVC along with appearances by Isaac Mizrahi and Cathie Black. 10 pm on NBC,11-24-2010 17:20:54,32,12,false,7483813542232064
+Twitter Web Client,Watch CNN tomorrow at 2 pm & 5 pm and on Friday at 7 pm & 11 pm for a Thanksgiving Special hosted by John King. I'll be a featured guest.,11-24-2010 15:53:23,19,6,false,7461789721698304
+Twitter Web Client,Staff Sgt. Salvatore A. Giunta received the Medal of Honor from Pres. Obama this month. It was a great honor to have him visit me today.,11-22-2010 17:22:23,26,10,false,6759410504310784
+Twitter Web Client,CNBC Titans: Donald Trump  will be shown Friday Nov 19th at 9 pm and 1 am Sunday 11/21 at 9 pm and  11/24 at 7 pm   http://bit.ly/ckojPN,11-18-2010 17:11:35,21,6,false,5307138364674048
+Twitter Web Client,We're getting down to the wire on The Apprentice--tune in tonight for some great action! 10 p.m. on NBC.,11-18-2010 15:45:35,27,3,false,5285497953853441
+Twitter Web Client,My interview last week with Greta van Susteren is available here in slightly abridged form. http://bit.ly/96ztOA  Good info to know about.,11-15-2010 19:42:07,34,15,false,4257859944579073
+Twitter Web Client,Tonight's episode of The Apprentice has a big surprise at the top of the show -- don't miss it! 10 p.m. on NBC.,11-11-2010 15:20:08,28,3,false,2742379589144576
+Twitter Web Client,Tonight's episode of The Apprentice is one you won't want to miss! Be sure to tune in--10 p.m. on NBC.,11-04-2010 15:00:52,37,14,false,29674109995
+Twitter Web Client,I'll be discussing a variety of topics tonight with Greta Van Susteren 10 p.m. on Fox News. It will be the first of a two part series.,11-03-2010 20:11:09,34,5,false,29601992948
+Twitter Web Client,I was on The View this morning. We talked about The Apprentice. Tonight's episode is a great one--tough exciting and surprising. 10 pm/NBC,10-28-2010 18:53:40,35,5,false,29014512646
+Twitter Web Client,Be prepared for a sensational episode of The Apprentice tomorrow night 10 pm on NBC.,10-27-2010 13:14:12,27,2,false,28888487946
+Twitter Web Client,Don't forget to tune in tonight to see another unpredictable and exciting episode of The Apprentice-- 10 pm on NBC,10-21-2010 16:38:25,31,2,false,28042446926
+Twitter Web Client,An HR solutions company polled 1000 employed adults to find out who would make ideal bosses...   http://bit.ly/9uP9vj,10-14-2010 17:48:29,46,21,false,27362772649
+Twitter Web Client,Be sure to watch The Apprentice tonight 10 p.m. on NBC--it's an episode you won't forget!,10-14-2010 14:00:16,36,4,false,27343104700
+Twitter Web Client,Scotland is beautiful and Trump Internatonal Golf Links-Scotland is progressing beautifully as well.  http://bit.ly/bUWWNb,10-07-2010 14:22:41,21,5,false,26652912130
+Twitter Web Client,Don't forget to tune in tonight for another exciting episode of The Apprentice--10 p.m. on NBC.,10-07-2010 14:11:11,24,2,false,26651899791
+Twitter Web Client,I'm honored to be presented the award of Doctor of Business Administration Honoris Causa from Robert Gordon University in Aberdeen Scotland,10-06-2010 13:40:23,31,7,false,26551913010
+Twitter Web Client,Read Ivanka's blog about last night's Apprentice on Entertainment Weekly ...http://bit.ly/bMNF72,10-01-2010 15:59:59,15,8,false,26092980045
+Twitter Web Client,Tune in tonight at 10 pm on NBC for another exciting episode of The Apprentice -- and see the Dog Whisperer make an appearance.,09-30-2010 15:10:41,100,119,false,25988176664
+Twitter Web Client,See the new sizzle reel for The Apprentice   http://bit.ly/ax8nah,09-24-2010 20:27:35,34,12,false,25436192384
+Twitter Web Client,Don't forget to tune in tonight at 10 p.m. on NBC for another action packed episode of The Apprentice.   http://bit.ly/bnAuAv,09-23-2010 18:22:05,43,5,false,25330385195
+Twitter Web Client,Be sure to tune in for Melania's second QVC show for Melania Timepieces & Jewelry  tonight live from 9-10 pm on QVC http://bit.ly/aDdvKj,09-17-2010 18:55:21,17,7,false,24783636234
+Twitter Web Client,Don't forget to tune in tonight for the two hour premiere of The Apprentice. 9 pm EST on NBC. We're all in for a fantastic new season!,09-16-2010 15:25:36,51,9,false,24673275254
+Twitter Web Client,Eric did a great job with his Eric Trump Foundation annual charity outing. I'm proud of him.  http://bit.ly/c1y3c3,09-15-2010 13:43:30,15,7,false,24570735633
+Twitter Web Client,I am very happy to have the civilian version of The Apprentice back on the air this fall. There will be excitement as well as opportunity.,09-14-2010 20:52:07,47,14,false,24508012246
+Twitter Web Client,Coming up soon: The two hour premiere of The Apprentice. Next Thursday September 16th at 9  pm on NBC.    http://bit.ly/bMB4CH,09-09-2010 16:29:27,38,10,false,24024630761
+Twitter Web Client,There's a lot going on at the Eric Trump Foundation ...  http://bit.ly/9rJ0sn,09-07-2010 18:07:27,21,8,false,23259108430
+Twitter Web Client,I was invited by Caroline Wozniacki to sit with her family in her special box during her match at the U.S. Open yesterday. She's fantastic!,09-07-2010 16:06:32,11,6,false,23249994601
+Twitter Web Client,Check out Trump International Hotel & Tower New York --spectacular! http://www.trump.com/Hotel_Collection/Trump_New_york/Trump_New_York.asp,09-02-2010 16:37:23,21,10,false,22812888292
+Twitter Web Client,Check out Serta's Counting Sheep (and me) at the Trump International Hotel New York http://bit.ly/SertaRm9,09-02-2010 16:27:17,16,1,false,22812121662
+Twitter Web Client,I'll be on The Late Show with David Letterman tonight--be sure to tune in for a great show. 11:30 pm on CBS.,09-01-2010 21:38:38,46,5,false,22742724001
+Twitter Web Client,Went to the Yankees game last night with Bill O'Reilly--we had a great time watching the Yankees win!,08-31-2010 20:00:03,44,26,false,22644749933
+Twitter Web Client,Spent a beautiful weekend golfing at Trump National Golf Club Westchester and Trump National Golf Club Bedminster.,08-30-2010 19:50:43,17,8,false,22551244200
+Twitter Web Client,The Miss Universe Pageant raked in some great ratings!  A great job by everyone.,08-26-2010 20:42:57,39,12,false,22207798183
+Twitter Web Client,Congratulations to Miss Mexico Jimena Navarrete our new Miss Universe 2010 and congratulations to everyone for a fantastic show.,08-24-2010 14:07:12,193,32,false,22003109005
+Twitter Web Client,It's going to get hotter in Las Vegas tonight! Watch the Miss Universe Pageant tonight on NBC at 9 p.m. I'm looking forward to being there!,08-23-2010 13:55:10,50,4,false,21915730688
+Twitter Web Client,Four more days until the Miss Universe Pageant. Be sure to tune in on Monday night at 9 p.m. on NBC--it will be an amazing show.,08-19-2010 19:15:36,43,5,false,21601308367
+Twitter Web Client,The original Apprentice returns with a two hour premiere on Thursday September 16th. Looking forward to a fantastic season!,08-19-2010 18:35:42,56,9,false,21598934653

@@ -160,6 +160,7 @@ dependencies = [
  "async-trait",
  "clap",
  "dotenv",
+ "lazy_static",
  "regex",
  "rustyline",
  "rustyline-derive",

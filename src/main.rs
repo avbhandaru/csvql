@@ -1,7 +1,11 @@
+#[macro_use(lazy_static)]
+extern crate lazy_static;
+
 mod file;
 mod query;
 mod repl;
 mod table;
+mod types;
 mod util;
 
 use clap::{crate_authors, crate_description, crate_version, App, Arg};
@@ -39,7 +43,12 @@ async fn main() {
       Arg::with_name("use_json")
         .short("j")
         .long("json")
-        .help("If present, then query output will be in JSON format versus csv (default)"),
+        .help("If present, then query output will be in JSON format versus csv (default)")
+    )
+    .arg(
+      Arg::with_name("infer_types")
+        .long("infer")
+        .help("If present, then csvql will infer the column types of any given csv, unless type annotations are already provided.")
     )
     .arg(
       Arg::with_name("queries")

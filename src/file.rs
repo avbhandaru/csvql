@@ -1,7 +1,9 @@
 use crate::table;
+use crate::types;
 use io::BufRead;
-use serde::ser;
-use serde::{Serialize, Serializer};
+use regex;
+// use serde::ser;
+// use serde::{Serialize, Serializer};
 use std::io::Write;
 use std::{fs, io, path};
 
@@ -41,12 +43,6 @@ impl std::error::Error for Error {}
 // }
 
 pub fn import_csv(path: &path::Path) -> Result<table::Table, Error> {
-  // let lines = read_file(path)?
-  //   .into_iter()
-  //   .map(|line| line.split(",").map(String::from).collect())
-  //   .collect::<Vec<Vec<String>>>();
-  // // println!("csv file:\n{:#?}", lines);
-  // // remove later
   let line = read_first_line(path)?;
   if line.len() == 0 {
     Err(Error::new(
@@ -56,11 +52,116 @@ pub fn import_csv(path: &path::Path) -> Result<table::Table, Error> {
   } else {
     let header = line
       .split(",")
-      // TODO let type be dynamic and grab type annotations from csv headers
-      .map(|entry| (String::from(entry), "VARCHAR(512)".to_string()))
+      .map(|entry| {
+        lazy_static! {
+          // Match Key
+          // C = <letter and or number strings of length at least 1>
+          // S = <any number of space>
+          // T = <any string of characters without commas>
+          // Matches (C)S(T)S
+          static ref RE: regex::Regex = regex::Regex::new(r"([a-zA-Z\d_\s]+)\(\s*([^,]+)\s*\)").unwrap();
+        }
+        if RE.is_match(entry) {
+          let captures = RE.captures(entry).unwrap();
+          let column_name = captures.get(1).map_or("null", |m| m.as_str()); // If column name is null then call it null
+          let column_type = captures.get(2).map_or("TEXT", |m| m.as_str()); // Default is TEXT, else annotated type
+          let is_valid_type = types::postgres::is_valid_type(&column_type);
+          (
+            column_name.to_string().replace(" ", "_"),
+            if is_valid_type {
+              column_type.to_string()
+            } else {
+              println!("Invalid SQL type annotation: {}. Defaulting column type to TEXT for column with name {}.", column_type, column_name);
+              "TEXT".to_string()
+            },
+          )
+        } else {
+          // Default column type cast to SQL TEXT
+          // Could make TEXT a constant
+          // TODO: Add dynamic type guessing as well (or have that be enabled by user)
+          let formatted_entry = entry.to_string().replace(" ", "_");
+          (formatted_entry, "TEXT".to_string())
+        }
+      })
       .collect::<table::Header>();
     // let rows = lines[1..].to_vec(); // Only need the header, since we're using sql COPY
     Ok(table::Table::with_header(header))
+  }
+}
+
+pub fn export(index: Option<usize>, path: &path::Path, table: &table::Table) -> Result<(), Error> {
+  // Validate that file directory is real
+  let mut absolute_path_buf;
+  if !path.is_dir() {
+    match path.parent() {
+      None => (),
+      Some(parent_path) => {
+        if !parent_path.is_dir() {
+          return Err(Error::new(
+            path.to_str().unwrap().to_string(),
+            "Failed to export query result. Invalid parent directory. Could not resolve."
+              .to_string(),
+          ));
+        }
+      }
+    }
+    // Check the file extension and decide how to export the file
+    absolute_path_buf = path
+      .parent()
+      .map_or(path::Path::new("/"), |parent| parent)
+      .canonicalize()
+      .unwrap();
+    absolute_path_buf.push(path.file_name().unwrap());
+  } else {
+    absolute_path_buf = path.canonicalize().unwrap();
+    absolute_path_buf.push("temp");
+    if index == None {
+      return Err(Error::new(
+        path.to_str().unwrap().to_string(),
+        "Failed to export query result. Invalid path. No file name.".to_string(),
+      ));
+    }
+    let out_index = index.unwrap();
+    absolute_path_buf.set_file_name(format!("out_{}", out_index).as_str());
+  }
+  println!("PARENT PATH WITH TEMP: {:?}", absolute_path_buf);
+
+  // Set file name and extensions
+  match path.extension() {
+    None => {
+      let _ = absolute_path_buf.set_extension("csv");
+    }
+    Some(extension) => {
+      let _ = absolute_path_buf.set_extension(extension);
+    }
+  }
+  let absolute_path = absolute_path_buf.as_path();
+
+  println!(
+    "PATH {:?}, ABSOLUTE PATH!! {:?}, Extension {:?}",
+    path,
+    absolute_path,
+    absolute_path_buf.extension()
+  );
+
+  match absolute_path.extension() {
+    Some(os_str) => match os_str.to_str().unwrap() {
+      "csv" => export_csv(absolute_path, table),
+      "json" => export_json(absolute_path, table),
+      _ => Err(Error::new(
+        path.to_str().unwrap().to_string(),
+        "Failed to export query result. Unsupported file extension. Must be .csv or .json."
+          .to_string(),
+      )),
+    },
+    None => {
+      let e = Error::new(
+        path.to_str().unwrap().to_string(),
+        "Failed to export query result. Invalid path. File has no extension.".to_string(),
+      );
+      println!("ERROR :'( : {:?}", e);
+      return Err(e);
+    }
   }
 }
 
@@ -71,7 +172,7 @@ pub fn export_csv(path: &path::Path, table: &table::Table) -> Result<(), Error> 
     .into_iter()
     // TODO: Uncomment below when support for type annotations is added
     // .map(|(col_name, col_type)| format!("{}({})", &col_name, &col_type))
-    .map(|(col_name, _)| format!("{}", &col_name))
+    .map(|(col_name, col_type)| format!("{}({})", &col_name, &col_type.to_uppercase()))
     .collect::<Vec<String>>()
     .join(",");
   let rows = table
@@ -107,7 +208,7 @@ fn read_first_line(path: &path::Path) -> Result<String, Error> {
   }
 }
 
-fn read_file(path: &path::Path) -> Result<Vec<String>, Error> {
+fn _read_file(path: &path::Path) -> Result<Vec<String>, Error> {
   // io::Result<io::Lines<io::BufReader<fs::File>>> <-- original return type
   // possible new return type? --> Result<io::Lines<io::BufReader<fs::File>>, Error>
   // Understand rust Error's and write a better Error type?

@@ -1,5 +1,6 @@
 use crate::querier::QuerierTrait;
 use crate::table;
+use crate::types;
 use async_trait::async_trait;
 use tokio_postgres::error::Error;
 use tokio_postgres::{connect, Client, NoTls, Row};
@@ -79,7 +80,8 @@ impl QuerierTrait for Querier {
       .map(|row| {
         let mut row_vector = Vec::new();
         for (col_index, _) in row.columns().iter().enumerate() {
-          row_vector.push(row.get(col_index));
+          // row_vector.push(row.get(col_index)); // TODO FIX PROBLEMS HERE!!
+          row_vector.push(types::postgres::get_value(&row, col_index))
         }
         row_vector
       })
@@ -112,8 +114,8 @@ impl QuerierTrait for Querier {
     }
   }
 
-  async fn list(&self) -> Result<Option<table::Table>, Error> {
-    self.query(list_tables_query().as_str()).await
+  async fn list(&self, is_verbose: bool) -> Result<Option<table::Table>, Error> {
+    self.query(list_tables_query(is_verbose).as_str()).await
   }
 
   async fn info(&self, table_name: &str, is_verbose: bool) -> Result<Option<table::Table>, Error> {
@@ -136,11 +138,11 @@ fn create_table_query(table_name: &str, table_header: &table::Header) -> String 
 }
 
 /*
-  csvql_db=# COPY first_table (source,text,created_at,retweet_count,favorite_count,is_retweet,id_str)
-  csvql_db-# FROM '/Users/akhil/csvql/data/test.csv'
-  csvql_db-# DELIMITER ','
-  csvql_db-# CSV HEADER;
-*/
+ * COPY first_table (source,text,created_at,retweet_count,favorite_count,is_retweet,id_str)
+ * FROM '/Users/akhil/csvql/data/test.csv'
+ * DELIMITER ','
+ * CSV HEADER;
+ */
 fn copy_into_query(table_path: &str, name: &str, header: &table::Header) -> String {
   let header = header
     .into_iter()
@@ -151,35 +153,45 @@ fn copy_into_query(table_path: &str, name: &str, header: &table::Header) -> Stri
     "COPY {} ({}) FROM '{}' DELIMITER ',' CSV HEADER",
     name, header, table_path
   );
-  // println!("query: {}", query);
   query
 }
 
-fn list_tables_query() -> String {
-  let query = format!(
-    "
-    SELECT
-      n.nspname AS \"Schema\",
-      c.relname AS \"Table\",
-      CASE
-        WHEN c.relkind = 'r' THEN 'table'
-        WHEN c.relkind = 'i' THEN 'index'
-        WHEN c.relkind = 'S' THEN 'sequence'
-        WHEN c.relkind = 'v' THEN 'view'
-        WHEN c.relkind = 'f' THEN 'foreign table'
-      END AS \"Type\",
-      a.rolname AS \"Owner\"
-    FROM pg_catalog.pg_class c
-      LEFT JOIN pg_catalog.pg_namespace n
-      ON n.oid = c.relnamespace
-      LEFT JOIN pg_catalog.pg_authid a
-      ON c.relowner = a.oid
-    WHERE c.relkind = ANY (ARRAY['r', 'i', 'S', 'p', 'f', 'v'])
-      AND n.nspname = 'public'
-    ORDER BY 1,2;
-    "
-  );
-  query
+fn list_tables_query(is_verbose: bool) -> String {
+  if is_verbose {
+    let query = "
+      SELECT
+        n.nspname AS \"Schema\",
+        c.relname AS \"Table\",
+        CASE
+          WHEN c.relkind = 'r' THEN 'table'
+          WHEN c.relkind = 'i' THEN 'index'
+          WHEN c.relkind = 'S' THEN 'sequence'
+          WHEN c.relkind = 'v' THEN 'view'
+          WHEN c.relkind = 'f' THEN 'foreign table'
+        END AS \"Type\",
+        a.rolname AS \"Owner\"
+      FROM pg_catalog.pg_class c
+        LEFT JOIN pg_catalog.pg_namespace n
+        ON n.oid = c.relnamespace
+        LEFT JOIN pg_catalog.pg_authid a
+        ON c.relowner = a.oid
+      WHERE c.relkind = ANY (ARRAY['r', 'i', 'S', 'p', 'f', 'v'])
+        AND n.nspname = 'public'
+      ORDER BY 1,2
+      ";
+    query.to_string()
+  } else {
+    let query = "
+      SELECT
+        c.relname AS \"Table\"
+      FROM pg_catalog.pg_class c
+        LEFT JOIN pg_catalog.pg_namespace n
+        ON n.oid = c.relnamespace
+      WHERE c.relkind = ANY (ARRAY['r', 'i', 'S', 'p', 'f', 'v'])
+        AND n.nspname = 'public'
+      ";
+    query.to_string()
+  }
 }
 
 fn get_table_info_query(table_name: &str, is_verbose: bool) -> String {
@@ -219,48 +231,10 @@ fn get_table_info_query(table_name: &str, is_verbose: bool) -> String {
         column_name AS \"Column\",
         data_type AS \"Datatype\"
       FROM information_schema.columns
-      WHERE (table_schema, table_name) = ('public', '{}');
+      WHERE (table_schema, table_name) = ('public', '{}')
       ",
       table_name
     );
     query
   }
-}
-
-// TODO --> consider removing, since we have copy
-//
-// MAKE SURE THIS IS WORKING
-//
-// Run with example in repl:
-// > \i /Users/akhil/csvql/data/test.csv first
-// > select * from first_table;
-fn _insert_into_query(
-  table_name: &str,
-  table_header: &table::Header,
-  table_data: table::Rows,
-) -> String {
-  let header = table_header
-    .into_iter()
-    .map(|(col_name, _)| col_name.as_str())
-    .collect::<Vec<_>>()
-    .join(",");
-  let values = table_data
-    .into_iter()
-    .map(|row| {
-      let row_values = row
-        .into_iter()
-        .map(|elt| {
-          // TODO perform some string validation and escapting:
-          // psql string with escapes is
-          // E'meow I like cats \\n meow he isn\\'t the coolest'
-          format!("'{}'", elt)
-        })
-        .collect::<Vec<_>>()
-        .join(",");
-      format!("({})", row_values)
-    })
-    .collect::<Vec<_>>()
-    .join(",");
-  let query = format!("INSERT INTO {} ({}) VALUES {}", table_name, header, values);
-  query
 }
