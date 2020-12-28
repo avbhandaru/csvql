@@ -7,15 +7,13 @@
 - Handles cleanup by removing imported tables after execution/repl exited
 
 ## How do I use it?
+ - brew install postgresql, grab this repo, you will need cargo to build.
 
 ### Examples
 
 ### Installation
 
 **Dependencies**:
- - a
- - b
- - c
 
 ## What are my alternatives?
 
