@@ -1,4 +1,7 @@
-# CSV Query Language
+# DISCONTINUED
+I've discontinued this work because [`Clickhouse`](https://clickhouse.com/docs/en/operations/utilities/clickhouse-local) does this already and much better.
+
+~# CSV Query Language~
 
 ## What is this for?
 - Handles dynamic CSV importing with type annotation
